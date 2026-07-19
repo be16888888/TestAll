@@ -102,12 +102,15 @@ class NanoNetsOCRApp:
             self.dir_entry.insert(0, path)
 
     def select_file(self):
+        initial_dir = "/mnt/e/DiskCUse/HFDownloads/OCRUse02/"
+        print(f"[DEBUG] select_file initialdir: {initial_dir}")
         path = filedialog.askopenfilename(
             title="選擇圖片檔案",
             filetypes=[("Image files", "*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP *.tiff *.TIFF")],
-            initialdir="/mnt/e/DiskCUse/HFDownloads/OCRUse02/"
+            initialdir=initial_dir
         )
         if path:
+            print(f"[DEBUG] Selected file: {path}")
             self.image_path = path
             self.file_label.config(text=os.path.basename(path), fg='white')
             self.log(f"已選擇檔案：{path}")
