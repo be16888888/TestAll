@@ -7,6 +7,7 @@ Separated UI that uses ocrspace_core for processing logic.
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 import os
+import json
 from ocrspace_core import process_single, load_api_key
 
 
@@ -100,37 +101,13 @@ class OCRSpaceApp:
         self.image_path = None
 
         # 在這裡才載入 API Key，確保 log_area 已可用
-        self.load_api_key()
-
-    def load_api_key(self):
-        """從 WebOcrAPI.json 載入 ocr.space 模型的 API Key"""
-        json_path = "WebOcrAPI.json"
-        if not os.path.exists(json_path):
-            self.log(f"錯誤：找不到設定檔 {json_path}")
-            self.api_status_label.config(text="API Key：設定檔遺失", fg='red')
-            return
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                configs = json.load(f)
+            self.api_key = load_api_key()
+            self.api_status_label.config(text="API Key：已載入", fg='#00ff00')
+            self.log("API Key 已從 WebOcrAPI.json 載入")
         except Exception as e:
-            self.log(f"錯誤：讀取設定檔失敗 - {e}")
-            self.api_status_label.config(text="API Key：讀取失敗", fg='red')
-            return
-
-        for cfg in configs:
-            if cfg.get("ModelName") == "ocr.space":
-                key = cfg.get("api_key")
-                if key:
-                    self.api_key = key
-                    self.api_status_label.config(text="API Key：已載入", fg='#00ff00')
-                    self.log("API Key 已從 WebOcrAPI.json 載入")
-                    return
-                else:
-                    self.api_status_label.config(text="API Key：金鑰為空", fg='red')
-                    self.log("錯誤：設定檔中 ocr.space 的 api_key 為空")
-                    return
-        self.api_status_label.config(text="API Key：找不到模型", fg='red')
-        self.log("錯誤：設定檔中找不到模型 ocr.space")
+            self.log(f"錯誤：載入 API Key 失敗 - {e}")
+            self.api_status_label.config(text="API Key：載入失敗", fg='red')
 
     def select_dir(self):
         path = filedialog.askdirectory(title="選擇輸出目錄", initialdir="/mnt/e/HFDownloads/")
