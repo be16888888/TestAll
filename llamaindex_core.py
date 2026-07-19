@@ -19,44 +19,73 @@ from docx.shared import Cm
 import io
 
 
-def load_api_key(json_path: str = "WebOcrAPI.json") -> tuple[str, str]:
-    """Load LlamaCloud API key and base URL from WebOcrAPI.json.
-    If the file doesn't exist, creates a default one with a placeholder key.
+def load_api_key(json_path: str = "WebOcrAPI.json") -> str:
+    """Load LlamaCloud API key from WebOcrAPI.json.
 
     Args:
         json_path: Path to the JSON configuration file.
 
     Returns:
-        Tuple of (api_key, base_url).
+        The API key string.
 
     Raises:
+        FileNotFoundError: If the config file is missing.
         ValueError: If the API key is missing or malformed.
     """
     if not os.path.exists(json_path):
-        # Create a default config file
-        default_config = {
-            "url": "https://api.cloud.llamaindex.ai",
-            "base_url": "https://api.cloud.llamaindex.ai/api/v2",
-            "api_key": "llx-kp6L7gAeSDVvtfS4ZXXwkFeQNG82KfcoSxpoC1Wqga1cr5Xa"  # placeholder
-        }
-        try:
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(default_config, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            raise ValueError(f"Failed to create default config file: {e}")
+        raise FileNotFoundError(f"Configuration file not found: {json_path}")
 
     try:
         with open(json_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+            configs = json.load(f)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON in {json_path}: {e}")
 
-    api_key = config.get("api_key") or config.get("LLAMA_CLOUD_API_KEY") or config.get("API_KEY")
-    if not api_key:
-        raise ValueError("API key for LlamaCloud is empty in WebOcrAPI.json")
+    if not isinstance(configs, list):
+        raise ValueError(f"Expected a list in {json_path}")
 
-    base_url = config.get("base_url") or config.get("url") or "https://api.cloud.llamaindex.ai/api/v2"
-    return api_key, base_url
+    target = None
+    for cfg in configs:
+        if cfg.get("ModelName") == "llamaindex":
+            target = cfg
+            break
+
+    if target is None:
+        raise ValueError("No configuration for model 'llamaindex' found in WebOcrAPI.json")
+
+    api_key = target.get("api_key", "").strip()
+    if not api_key:
+        raise ValueError("API key for 'llamaindex' is empty in WebOcrAPI.json")
+
+    return api_key
+
+
+def get_base_url(json_path: str = "WebOcrAPI.json") -> str:
+    """Get LlamaCloud base URL from WebOcrAPI.json.
+
+    Args:
+        json_path: Path to the JSON configuration file.
+
+    Returns:
+        The base URL string (defaults to v2 endpoint).
+    """
+    if not os.path.exists(json_path):
+        return "https://api.cloud.llamaindex.ai/api/v2"
+
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            configs = json.load(f)
+    except Exception:
+        return "https://api.cloud.llamaindex.ai/api/v2"
+
+    if not isinstance(configs, list):
+        return "https://api.cloud.llamaindex.ai/api/v2"
+
+    for cfg in configs:
+        if cfg.get("ModelName") == "llamaindex":
+            return cfg.get("base_url") or cfg.get("url") or "https://api.cloud.llamaindex.ai/api/v2"
+
+    return "https://api.cloud.llamaindex.ai/api/v2"
 
 
 def call_llamacloud_api(api_key: str, image_path: str, base_url: str) -> dict:
@@ -75,13 +104,13 @@ def call_llamacloud_api(api_key: str, image_path: str, base_url: str) -> dict:
     """
     upload_url = f"{base_url}/parse/upload"
     headers = {"Authorization": f"Bearer {api_key}"}
-    
+
     # Configuration for the processing tier
     config = {
         "tier": "cost_effective",  # can be fast, agentic, agentic_plus
         "version": "latest"
     }
-    
+
     with open(image_path, 'rb') as f:
         files = {"file": (os.path.basename(image_path), f)}
         data = {"configuration": json.dumps(config)}
@@ -103,12 +132,12 @@ def call_llamacloud_api(api_key: str, image_path: str, base_url: str) -> dict:
         resp = requests.get(status_url, headers=headers, params=params, timeout=30)
         if resp.status_code != 200:
             raise Exception(f"Failed to get status (HTTP {resp.status_code}): {resp.text}")
-        
+
         status_json = resp.json()
         # The response may have a 'job' object or direct fields
         job = status_json.get("job", {})
         status = job.get("status") or status_json.get("status")
-        
+
         if status == "completed":
             # Extract markdown content
             markdown_data = status_json.get("markdown") or job.get("markdown")
@@ -121,26 +150,26 @@ def call_llamacloud_api(api_key: str, image_path: str, base_url: str) -> dict:
                         return {"markdown": {"content": full_md}}
                 elif isinstance(markdown_data, str):
                     return {"markdown": {"content": markdown_data}}
-            
+
             # Fallback: try to get content from result or text fields
             result = status_json.get("result", {})
             content = result.get("markdown") or result.get("content") or result.get("text")
             if content:
                 return {"markdown": {"content": content}}
-            
+
             text = status_json.get("text") or job.get("text")
             if text:
                 return {"markdown": {"content": text}}
-                
+
             raise Exception("Completed but no markdown content found")
-        
+
         elif status in ("failed", "error"):
             error_msg = job.get("error_message") or status_json.get("error_message") or "Unknown error"
             raise Exception(f"Processing failed: {error_msg}")
-        
+
         # Still processing, wait a bit
         time.sleep(2)
-    
+
     raise Exception("Polling timeout - processing did not complete within 2 minutes")
 
 
@@ -185,7 +214,7 @@ def extract_table_to_dataframe(markdown_text: str) -> pd.DataFrame | None:
     lines = markdown_text.splitlines()
     table_lines = []
     in_table = False
-    
+
     for line in lines:
         # Check if line looks like a markdown table row
         if '|' in line and (line.strip().startswith('|') or line.strip().endswith('|')):
@@ -201,7 +230,7 @@ def extract_table_to_dataframe(markdown_text: str) -> pd.DataFrame | None:
                     # Reset if we didn't get a proper table
                     table_lines = []
                     in_table = False
-    
+
     if len(table_lines) >= 3:
         table_text = "\n".join(table_lines)
         try:
@@ -210,7 +239,7 @@ def extract_table_to_dataframe(markdown_text: str) -> pd.DataFrame | None:
         except Exception:
             # Fallback to manual parsing
             return _parse_markdown_table(table_text)
-    
+
     # If no markdown table found, try to find an HTML table
     html_pattern = re.compile(r'<table[^>]*>.*?</table>', re.IGNORECASE | re.DOTALL)
     html_match = html_pattern.search(markdown_text)
@@ -222,7 +251,7 @@ def extract_table_to_dataframe(markdown_text: str) -> pd.DataFrame | None:
                 return dfs[0]
         except Exception:
             pass
-    
+
     return None
 
 
@@ -246,25 +275,25 @@ def _parse_markdown_table(md_text: str) -> pd.DataFrame:
             stripped = line.strip('|')
             cells = [cell.strip() for cell in stripped.split('|')]
             data_lines.append(cells)
-    
+
     if not data_lines:
         raise ValueError("No valid data rows found in markdown table")
-    
+
     header = data_lines[0]
     data = data_lines[1:]
-    
+
     # Determine maximum number of columns
     max_cols = max(len(row) for row in data_lines)
-    
+
     # Pad rows that are shorter than max_cols
     for row in data:
         while len(row) < max_cols:
             row.append('')
-    
+
     # Pad header if needed
     while len(header) < max_cols:
         header.append('')
-    
+
     return pd.DataFrame(data, columns=header[:max_cols])
 
 
@@ -285,13 +314,13 @@ def split_text_around_table(text: str) -> tuple[str, str]:
         before = text[:start]
         after = text[end:]
         return before.strip(), after.strip()
-    
+
     # Fallback to markdown table detection
     lines = text.splitlines()
     table_start = None
     table_end = None
     in_table = False
-    
+
     for i, line in enumerate(lines):
         if '|' in line and (line.strip().startswith('|') or line.strip().endswith('|')):
             if not in_table:
@@ -301,7 +330,7 @@ def split_text_around_table(text: str) -> tuple[str, str]:
             if in_table:
                 table_end = i
                 break
-    
+
     if table_start is not None:
         if table_end is None:
             table_end = len(lines)
@@ -310,7 +339,7 @@ def split_text_around_table(text: str) -> tuple[str, str]:
         before_text = "\n".join(before_lines).strip()
         after_text = "\n".join(after_lines).strip()
         return before_text, after_text
-    
+
     return text, ""
 
 
@@ -327,18 +356,18 @@ def _generate_word_filename(before_text: str, fallback_base: str, timestamp: str
     """
     date_str = None
     warehouse_str = None
-    
+
     # Date: support Chinese year/month/day with optional spaces
     date_match = re.search(r'(\d{2,3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)
     if date_match:
         y, m, d = date_match.groups()
         date_str = f"{y}年{m}月{d}日"
-    
+
     # Warehouse: support patterns like (6庫) or (4-2庫)
     wh_match = re.search(r'\((\d{1,3}(?:-\d{1,2})?)\s*庫\)', before_text)
     if wh_match:
         warehouse_str = f"({wh_match.group(1)}庫)"
-    
+
     if date_str and warehouse_str:
         return f"{date_str}{warehouse_str}.docx"
     else:
@@ -356,7 +385,7 @@ def _merge_title_info(lines: list[str]) -> list[str]:
     """
     if not lines:
         return lines
-    
+
     new_lines = []
     i = 0
     while i < len(lines):
@@ -400,20 +429,20 @@ def save_as_word(df: pd.DataFrame, image_path: str, output_dir: str, before_text
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     word_filename = f"{base_name}_{timestamp}.docx"
     word_path = os.path.join(output_dir, word_filename)
-    
+
     doc = Document()
     section = doc.sections[0]
     section.top_margin = Cm(1)
     section.bottom_margin = Cm(1)
     section.left_margin = Cm(1)
     section.right_margin = Cm(1)
-    
+
     if before_text:
         before_lines = [line.strip() for line in before_text.split('\n') if line.strip()]
         merged_lines = _merge_title_info(before_lines)
         for line in merged_lines:
             doc.add_paragraph(line)
-    
+
     if df.shape[1] > 0:
         table = doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
         table.style = 'Table Grid'
@@ -423,7 +452,7 @@ def save_as_word(df: pd.DataFrame, image_path: str, output_dir: str, before_text
             for j, value in enumerate(row):
                 cell_text = "" if pd.isna(value) else str(value)
                 table.cell(i + 1, j).text = cell_text
-    
+
     doc.save(word_path)
     return word_path
 
@@ -462,7 +491,7 @@ def save_as_md(content: str, image_path: str, output_dir: str) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     md_filename = f"{base_name}_{timestamp}.md"
     md_path = os.path.join(output_dir, md_filename)
-    
+
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write(f"# OCR Results - {os.path.basename(image_path)}\n\n")
         f.write(f"**Processing Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
@@ -485,7 +514,7 @@ def save_as_html(content: str, image_path: str, output_dir: str) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     html_filename = f"{base_name}_{timestamp}.html"
     html_path = os.path.join(output_dir, html_filename)
-    
+
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(f"<!DOCTYPE html>\n<html>\n<head>\n<title>OCR Results - {os.path.basename(image_path)}</title>\n</head>\n<body>\n")
         f.write(f"<h1>OCR Results - {os.path.basename(image_path)}</h1>")
@@ -515,31 +544,25 @@ def process_image(api_key: str, image_path: str, output_dir: str,
     Raises:
         Exception: If any step in the processing fails.
     """
-    # 1. Call LlamaCloud API
-    _, base_url = load_api_key()  # We'll get the base_url from config, but we already have api_key
-    # Actually, we need to get both from load_api_key, but we already have api_key as param
-    # Let's re-call load_api_key to get base_url (it's cheap) or we could have returned both
-    # For simplicity, we'll call it again (or we could change the function to accept both)
-    # But to avoid breaking the signature, we'll get base_url inside
-    _, base_url = load_api_key()
+    base_url = get_base_url()
     response_json = call_llamacloud_api(api_key, image_path, base_url)
-    
-    # 2. Extract markdown content
+
+    # Extract markdown content
     markdown_content = extract_markdown_content(response_json)
-    
+
     results = {}
-    
-    # 3. Save HTML if requested
+
+    # Save HTML if requested
     if save_html:
         html_path = save_as_html(markdown_content, image_path, output_dir)
         results['html'] = html_path
-    
-    # 4. Save Markdown if requested
+
+    # Save Markdown if requested
     if save_md:
         md_path = save_as_md(markdown_content, image_path, output_dir)
         results['md'] = md_path
-    
-    # 5. Extract table and save Word/Excel if requested
+
+    # Extract table and save Word/Excel if requested
     df = None
     if save_word or save_excel:
         # Try to extract table from the markdown content
@@ -553,15 +576,15 @@ def process_image(api_key: str, image_path: str, output_dir: str,
                 df = df[mask].copy()
                 # Also drop rows that are all NaN
                 df = df.dropna(how='all')
-    
+
     if save_word and df is not None and not df.empty:
         # Get text before the table for header info
         before_text, _ = split_text_around_table(markdown_content)
         word_path = save_as_word(df, image_path, output_dir, before_text)
         results['word'] = word_path
-    
+
     if save_excel and df is not None and not df.empty:
         excel_path = save_as_excel(df, image_path, output_dir)
         results['excel'] = excel_path
-    
+
     return results
