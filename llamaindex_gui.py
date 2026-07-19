@@ -118,7 +118,7 @@ class LlamaCloudOCRApp:
     def select_file(self):
         path = filedialog.askopenfilename(
             title="選擇圖片檔案",
-            filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff *.pdf")],
+            filetypes=[("Image files", "*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP *.tiff *.TIFF *.pdf *.PDF")],
             initialdir="/mnt/e/HFDownloads/OCRUse02/"
         )
         if path:
