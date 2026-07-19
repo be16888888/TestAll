@@ -11,7 +11,7 @@ from docx import Document
 import pandas as pd
 
 API_KEY = "09c019f3-8348-11f1-8b50-668e6851cbef"
-DEFAULT_OUTPUT_DIR = "/mnt/e/DiskCUse/HFDownloads/OCRUse02"
+DEFAULT_OUTPUT_DIR = "/mnt/e/DiskCUse/HFDownloads/"
 
 class NanoNetsOCRApp:
     def __init__(self, root):
