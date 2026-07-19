@@ -16,7 +16,7 @@ from watchdog.events import FileSystemEventHandler
 
 # Project root is two levels up from this script (scripts/auto_backup.py -> scripts/ -> project root)
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
-# Defaults, can be overridden by env
+# Defaults, can be overridden by env or CLI
 DEBOUNCE_SECONDS = int(os.environ.get("DEBOUNCE_SECONDS", "10"))
 GIT_REMOTE = os.environ.get("GIT_REMOTE", "origin")
 GIT_BRANCH = os.environ.get("GIT_BRANCH", "main")
@@ -106,15 +106,16 @@ class DebouncedHandler(FileSystemEventHandler):
 
 def main():
     import argparse
+    global DEBOUNCE_SECONDS, GIT_REMOTE, GIT_BRANCH
     parser = argparse.ArgumentParser()
-    parser.add_argument("--debounce", type=int, help=f"Debounce seconds (default: {DEBOUNCE_SECONDS})")
-    parser.add_argument("--remote", help=f"Git remote name (default: {GIT_REMOTE})")
-    parser.add_argument("--branch", help=f"Git branch name (default: {GIT_BRANCH})")
+    parser.add_argument("--debounce", type=int, default=DEBOUNCE_SECONDS)
+    parser.add_argument("--remote", default=GIT_REMOTE)
+    parser.add_argument("--branch", default=GIT_BRANCH)
     args = parser.parse_args()
 
-    debounce = args.debounce if args.debounce is not None else DEBOUNCE_SECONDS
-    remote = args.remote if args.remote is not None else GIT_REMOTE
-    branch = args.branch if args.branch is not None else GIT_BRANCH
+    DEBOUNCE_SECONDS = args.debounce
+    GIT_REMOTE = args.remote
+    GIT_BRANCH = args.branch
 
     if not (PROJECT_ROOT / ".git").exists():
         print("❌ Not a git repository")
@@ -122,13 +123,13 @@ def main():
 
     # Verify remote exists
     result = subprocess.run(["git", "remote"], cwd=PROJECT_ROOT, capture_output=True, text=True)
-    if remote not in result.stdout:
-        print(f"❌ Remote '{remote}' not found. Run: git remote add {remote} <url>")
+    if GIT_REMOTE not in result.stdout:
+        print(f"❌ Remote '{GIT_REMOTE}' not found. Run: git remote add {GIT_REMOTE} <url>")
         sys.exit(1)
 
     print(f"🔍 Watching: {PROJECT_ROOT}")
-    print(f"⏱️  Debounce: {debounce}s")
-    print(f"🚀 Push to: {remote}/{branch}")
+    print(f"⏱️  Debounce: {DEBOUNCE_SECONDS}s")
+    print(f"🚀 Push to: {GIT_REMOTE}/{GIT_BRANCH}")
     print("Press Ctrl+C to stop\n")
 
     handler = DebouncedHandler()
