@@ -4,6 +4,7 @@ import requests
 import json
 import os
 import re
+import base64
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
@@ -12,6 +13,8 @@ import pandas as pd
 
 API_KEY = "09c019f3-8348-11f1-8b50-668e6851cbef"
 DEFAULT_OUTPUT_DIR = "/mnt/e/DiskCUse/HFDownloads/"
+WORKFLOW_ID = "46ae503e-bb1b-4c79-a5e7-86f4b812e1c7"
+BASE_URL_WORKFLOW = "https://app.nanonets.com/api/v4"
 
 class NanoNetsOCRApp:
     def __init__(self, root):
@@ -68,7 +71,7 @@ class NanoNetsOCRApp:
                                        selectmode=tk.EXTENDED, font=self.listbox_font,
                                        exportselection=False)
         self.file_listbox.pack(side='left', fill='both', expand=True, padx=(0, 5))
-        
+
         btn_frame = tk.Frame(frame_file, bg=self.bg_color)
         btn_frame.pack(side='right')
         tk.Button(btn_frame, text="新增圖片", command=self.select_files,
@@ -81,19 +84,19 @@ class NanoNetsOCRApp:
         # Options area
         frame_options = tk.Frame(root, bg=self.bg_color)
         frame_options.pack(pady=5, fill='x', padx=20)
-        
+
         self.save_md_var = tk.BooleanVar(value=True)
         tk.Checkbutton(frame_options, text="輸出 Markdown (.md)", variable=self.save_md_var,
                        fg=self.fg_color, bg=self.bg_color, font=self.checkbox_font,
                        selectcolor=self.entry_bg, activebackground=self.bg_color,
                        activeforeground=self.fg_color).pack(side='left', padx=10)
-        
+
         self.save_word_var = tk.BooleanVar(value=True)
         tk.Checkbutton(frame_options, text="輸出 Word (.docx)", variable=self.save_word_var,
                        fg=self.fg_color, bg=self.bg_color, font=self.checkbox_font,
                        selectcolor=self.entry_bg, activebackground=self.bg_color,
                        activeforeground=self.fg_color).pack(side='left', padx=10)
-        
+
         self.save_excel_var = tk.BooleanVar(value=True)
         tk.Checkbutton(frame_options, text="輸出 Excel (.xlsx)", variable=self.save_excel_var,
                        fg=self.fg_color, bg=self.bg_color, font=self.checkbox_font,
@@ -167,9 +170,9 @@ class NanoNetsOCRApp:
         suffix = path.suffix.lower()
         if suffix in ('.jpeg', '.jpg'):
             return image_path
-        
+
         jpeg_path = path.with_suffix('.jpeg')
-        
+
         with Image.open(image_path) as img:
             if img.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', img.size, (255, 255, 255))
@@ -179,9 +182,9 @@ class NanoNetsOCRApp:
                 img = background
             elif img.mode != 'RGB':
                 img = img.convert('RGB')
-            
+
             img.save(jpeg_path, 'JPEG', quality=95)
-        
+
         self.log(f"格式轉換: {os.path.basename(image_path)} -> {os.path.basename(jpeg_path)}")
         return str(jpeg_path)
 
@@ -199,7 +202,7 @@ class NanoNetsOCRApp:
                 raise ValueError("無法從 JSON 中找到 markdown content")
             return content
         except Exception as e:
-            raise Exception(f"解析 JSON 失敗: {e}\n原始響應: {json_data}")
+            raise Exception(f"解析 JSON 失敗: {e}\\n原始響應: {json_data}")
 
     def html_table_to_dataframe(self, html_str):
         """從包含 HTML 的字符串中提取第一個 <table> 並轉為 DataFrame"""
@@ -207,7 +210,6 @@ class NanoNetsOCRApp:
         table_matches = table_pattern.findall(html_str)
         if not table_matches:
             raise ValueError("未找到任何表格標籤")
-        
         first_table = table_matches[0]
         try:
             dfs = pd.read_html(first_table)
@@ -215,7 +217,7 @@ class NanoNetsOCRApp:
                 raise ValueError("解析表格後未獲得數據")
             return dfs[0]
         except Exception as e:
-            raise Exception(f"解析 HTML 表格失敗: {e}\n表格片段:\n{first_table[:500]}")
+            raise Exception(f"解析 HTML 表格失敗: {e}\\n表格片段:\\n{first_table[:500]}")
 
     def save_as_markdown(self, content, image_path, output_dir):
         """保存 HTML/Markdown 內容到 .md 文件"""
@@ -223,10 +225,10 @@ class NanoNetsOCRApp:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         md_filename = f"{base_name}_{timestamp}.md"
         md_path = os.path.join(output_dir, md_filename)
-        
+
         with open(md_path, 'w', encoding='utf-8') as f:
-            f.write(f"# OCR Results - {os.path.basename(image_path)}\n\n")
-            f.write(f"**Processing Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"# OCR Results - {os.path.basename(image_path)}\\n\\n")
+            f.write(f"**Processing Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\\n\\n")
             f.write(content)
         return md_path
 
@@ -236,14 +238,16 @@ class NanoNetsOCRApp:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         word_filename = f"{base_name}_{timestamp}.docx"
         word_path = os.path.join(output_dir, word_filename)
-        
+
         doc = Document()
         doc.add_heading('提取的表格數據', level=1)
         table = doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
         table.style = 'Table Grid'
         for j, col_name in enumerate(df.columns):
             table.cell(0, j).text = str(col_name)
-        for i, row in df.iterrows():
+        # Use iloc to avoid index type issues
+        for i in range(df.shape[0]):
+            row = df.iloc[i]
             for j, value in enumerate(row):
                 table.cell(i + 1, j).text = str(value)
         doc.save(word_path)
@@ -255,7 +259,6 @@ class NanoNetsOCRApp:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         excel_filename = f"{base_name}_{timestamp}.xlsx"
         excel_path = os.path.join(output_dir, excel_filename)
-        
         df.to_excel(excel_path, index=False)
         return excel_path
 
@@ -263,30 +266,112 @@ class NanoNetsOCRApp:
         """調用 Nanonets OCR API (參考 111.py 的方式)"""
         url = "https://extraction-api.nanonets.com/api/v1/extract/sync"
         headers = {"Authorization": f"Bearer {api_key}"}
-        
+
         with open(image_path, 'rb') as f:
             files = {"file": (os.path.basename(image_path), f)}
             data = {"output_format": "markdown"}
             response = requests.post(url, headers=headers, files=files, data=data, timeout=120)
-        
+
         if response.status_code != 200:
             raise Exception(f"API 返回錯誤 (HTTP {response.status_code}): {response.text}")
         return response.json()
 
+    def _workflow_auth_headers(self):
+        """產生工作流 API 的 Basic 認證標頭"""
+        token = base64.b64encode(f"{API_KEY}:".encode()).decode()
+        return {"Authorization": f"Basic {token}"}
+
+    def _upload_document_workflow(self, workflow_id, image_path):
+        """使用工作流 API 上傳文件"""
+        url = f"{BASE_URL_WORKFLOW}/workflows/{workflow_id}/documents/upload"
+        headers = self._workflow_auth_headers()
+        with open(image_path, 'rb') as f:
+            files = {'file': (Path(image_path).name, f, 'image/webp')}
+            data = {'async': 'false'}
+            resp = requests.post(url, headers=headers, files=files, data=data, timeout=120)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _get_document_workflow(self, workflow_id, document_id):
+        """使用工作流 API 查詢文件處理狀態"""
+        url = f"{BASE_URL_WORKFLOW}/workflows/{workflow_id}/documents/{document_id}"
+        headers = self._workflow_auth_headers()
+        resp = requests.get(url, headers=headers, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _extract_data_from_workflow(self, doc_json):
+        """從工作流 API 回應中提取欄位和表格資料"""
+        fields = {}
+        items = []
+        for page in doc_json.get('pages', []):
+            page_data = page.get('data', {})
+            for field in page_data.get('fields', []):
+                label = field.get('label', '').strip()
+                text = field.get('text', '').strip()
+                if label and text:
+                    fields[label] = text
+            for table in page_data.get('tables', []):
+                for row in table.get('rows', []):
+                    cells = row.get('cells', [])
+                    item = {}
+                    for cell in cells:
+                        label = cell.get('label', '').strip()
+                        text = cell.get('text', '').strip()
+                        if label and text:
+                            item[label] = text
+                    if item:
+                        items.append(item)
+        return fields, items
+
+    def _workflow_to_markdown(self, fields, items):
+        """將工作流 API 提取的欄位和表格轉為 Markdown 字串"""
+        lines = []
+        lines.append("# OCR Results")
+        lines.append("")
+        if fields:
+            lines.append("## Extracted Fields")
+            for k, v in fields.items():
+                lines.append(f"- **{k}**: {v}")
+            lines.append("")
+        if items:
+            lines.append("## Extracted Table")
+            headers = list(items[0].keys())
+            lines.append("| " + " | ".join(headers) + " |")
+            lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+            for item in items:
+                line = "| " + " | ".join(item.get(h, "") for h in headers) + " |"
+                lines.append(line)
+            lines.append("")
+        else:
+            lines.append("_No table data detected_")
+            lines.append("")
+        return "\n".join(lines)
+
+    def _items_to_dataframe(self, items):
+        """將工作流 API 的 items 轉為 pandas DataFrame"""
+        if not items:
+            return pd.DataFrame()
+        headers = list(items[0].keys())
+        data = []
+        for item in items:
+            data.append([item.get(h, "") for h in headers])
+        return pd.DataFrame(data, columns=headers)
+
     def process_single(self, api_key, image_path, output_dir):
-        """處理單一圖片"""
+        """處理單一圖片，先嘗試 extraction API，失敗則改用工作流 API"""
         self.log(f"\n--- 處理: {os.path.basename(image_path)} ---")
         self.update_progress(f"處理中: {os.path.basename(image_path)}")
-        
+
         # 1. 格式轉換
         processed_path = self.convert_to_jpeg(image_path)
-        
+
         try:
-            # 2. 調用 API
-            self.log("正在上傳圖片並調用 Nanonets API...")
+            # 2. 嘗試使用 extraction API
+            self.log("正在上傳圖片並調用 Nanonets Extraction API...")
             response_json = self.call_nanonets_api(api_key, processed_path)
             self.log("API 調用成功，正在解析回應...")
-            
+
             # 3. 儲存原始 JSON
             base_name = os.path.splitext(os.path.basename(image_path))[0]
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -295,41 +380,105 @@ class NanoNetsOCRApp:
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(response_json, f, indent=2, ensure_ascii=False)
             self.log(f"原始 JSON 已保存: {json_path}")
-            
+
             # 4. 提取 HTML 內容
             html_content = self.extract_html_content(response_json)
             self.log(f"提取到 HTML 內容，長度: {len(html_content)} 字符")
-            
+
             results = {}
-            
+
             # 5. 輸出 Markdown
             if self.save_md_var.get():
                 md_path = self.save_as_markdown(html_content, image_path, output_dir)
                 results['md'] = md_path
                 self.log(f"Markdown 已保存: {md_path}")
-            
+
             # 6. 解析表格並輸出 Word/Excel
             if self.save_word_var.get() or self.save_excel_var.get():
                 self.log("正在解析 HTML 表格...")
                 df = self.html_table_to_dataframe(html_content)
                 self.log(f"解析成功，表格尺寸: {df.shape[0]} 行 x {df.shape[1]} 列")
-                
+
                 if self.save_word_var.get():
                     word_path = self.save_as_word(df, image_path, output_dir)
                     results['word'] = word_path
                     self.log(f"Word 已保存: {word_path}")
-                
+
                 if self.save_excel_var.get():
                     excel_path = self.save_as_excel(df, image_path, output_dir)
                     results['excel'] = excel_path
                     self.log(f"Excel 已保存: {excel_path}")
-            
+
             return results
-            
+
         except Exception as e:
-            raise Exception(f"處理失敗: {e}")
+            # If extraction API fails due to missing markdown, try workflow API
+            if "無法從 JSON 中找到 markdown content" in str(e):
+                self.log("Extraction API 未返回 markdown content，嘗試使用工作流 API...")
+                try:
+                    # Workflow API does not require format conversion? We'll use original image path.
+                    # Step 1: Upload document
+                    self.log("正在上傳文件到工作流...")
+                    upload_resp = self._upload_document_workflow(WORKFLOW_ID, image_path)
+                    document_id = upload_resp.get('document_id')
+                    if not document_id:
+                        raise Exception("工作流上傳回應中未找到 document_id")
+
+                    # Step 2: Poll for completion
+                    self.log(f"等待工作流處理完成 (document_id: {document_id})...")
+                    while True:
+                        doc = self._get_document_workflow(WORKFLOW_ID, document_id)
+                        ready = False
+                        for page in doc.get('pages', []):
+                            page_data = page.get('data', {})
+                            if page_data.get('fields') or page_data.get('tables'):
+                                ready = True
+                                break
+                        if ready:
+                            self.log("工作流處理完成！")
+                            break
+                        else:
+                            self.log("工作流仍在處理中...")
+                            import time
+                            time.sleep(3)
+
+                    # Step 3: Extract data
+                    fields, items = self._extract_data_from_workflow(doc)
+                    self.log(f"從工作流提取到 {len(fields)} 個欄位和 {len(items)} 列表格數據")
+
+                    # Step 4: Generate markdown from workflow data
+                    markdown_content = self._workflow_to_markdown(fields, items)
+                    self.log(f"生成的 Markdown 長度: {len(markdown_content)} 字符")
+
+                    # Step 5: Save markdown if requested
+                    results = {}
+                    if self.save_md_var.get():
+                        md_path = self.save_as_markdown(markdown_content, image_path, output_dir)
+                        results['md'] = md_path
+                        self.log(f"Markdown 已保存: {md_path}")
+
+                    # Step 6: Convert items to DataFrame for Word/Excel
+                    df = self._items_to_dataframe(items)
+                    if self.save_word_var.get() or self.save_excel_var.get():
+                        if self.save_word_var.get():
+                            word_path = self.save_as_word(df, image_path, output_dir)
+                            results['word'] = word_path
+                            self.log(f"Word 已保存: {word_path}")
+                        if self.save_excel_var.get():
+                            excel_path = self.save_as_excel(df, image_path, output_dir)
+                            results['excel'] = excel_path
+                            self.log(f"Excel 已保存: {excel_path}")
+
+                    return results
+
+                except Exception as workflow_e:
+                    self.log(f"工作流 API 也失敗: {workflow_e}")
+                    raise Exception(f"處理失敗 (両方 API 均失敗): {e}") from workflow_e
+            else:
+                # Re-raise if it's a different error
+                raise Exception(f"處理失敗: {e}")
         finally:
-            # 清理臨時檔案
+            # Clean up temporary JPEG file if we created one
             if processed_path != image_path:
                 try:
                     os.remove(processed_path)
@@ -343,35 +492,35 @@ class NanoNetsOCRApp:
             if not api_key:
                 messagebox.showerror("錯誤", "請先輸入 API Key")
                 return
-            
+
             if not self.image_paths:
                 messagebox.showerror("錯誤", "請先新增至少一張圖片")
                 return
-            
+
             output_dir = self.dir_entry.get().strip()
             if not output_dir:
                 messagebox.showerror("錯誤", "請選擇輸出目錄")
                 return
-            
+
             if not os.path.exists(output_dir):
                 try:
                     os.makedirs(output_dir)
                 except Exception as e:
                     messagebox.showerror("錯誤", f"無法建立輸出目錄: {e}")
                     return
-            
+
             if not (self.save_md_var.get() or self.save_word_var.get() or self.save_excel_var.get()):
                 messagebox.showerror("錯誤", "請至少勾選一種輸出格式")
                 return
-            
+
             self.process_btn.config(state='disabled')
             self.log("\n" + "="*50)
             self.log("開始批次處理...")
             self.log("="*50)
-            
+
             success_count = 0
             fail_count = 0
-            
+
             for i, image_path in enumerate(self.image_paths):
                 self.update_progress(f"處理中 ({i+1}/{len(self.image_paths)}): {os.path.basename(image_path)}")
                 try:
@@ -382,10 +531,10 @@ class NanoNetsOCRApp:
                     fail_count += 1
                     error_msg = f"❌ 失敗: {os.path.basename(image_path)} - {str(e)}"
                     self.log(error_msg)
-            
+
             self.update_progress(f"完成! 成功: {success_count}, 失敗: {fail_count}")
             self.process_btn.config(state='normal')
-            
+
             summary = f"批次處理完成!\n成功: {success_count}\n失敗: {fail_count}\n輸出目錄: {output_dir}"
             self.log("\n" + "="*50)
             self.log(summary)
