@@ -7,7 +7,6 @@ Contains the core OCR processing logic for OCR.Space API, separated from UI.
 import os
 import re
 import json
-import time
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Tuple, Optional, Any
@@ -251,12 +250,7 @@ def extract_table_to_dataframe_from_block(block_text: str) -> pd.DataFrame:
             raise Exception(f"Failed to parse HTML table: {e}")
     else:
         # Assume Markdown
-        try:
-            return pd.read_markdown(io.StringIO(block_text))
-        except (ImportError, AttributeError):
-            return _parse_markdown_table(block_text)
-        except Exception:
-            return _parse_markdown_table(block_text)
+        return _parse_markdown_table(block_text)
 
 
 def _parse_markdown_table(md_text: str) -> pd.DataFrame:
@@ -264,7 +258,7 @@ def _parse_markdown_table(md_text: str) -> pd.DataFrame:
     lines = md_text.splitlines()
     data_lines = []
     for line in lines:
-        if re.search(r'^\s*\|[\s\-:]+?\|', line):
+        if re.search(r'^\s*\|\s*[-:|]+\s*\|', line):
             continue
         if '|' in line:
             stripped = line.strip('|')
@@ -464,15 +458,16 @@ def process_single(api_key: str, image_path: str, output_dir: str,
     max_retries = 1
     attempt = 0
     final_ocr_text = ""
+    png_path = None  # to track temporary PNG
     while attempt <= max_retries:
         try:
-            processed_path = convert_to_png(image_path) if attempt > 0 else image_path
-            if attempt > 0:
-                # For retry, we already converted to PNG
-                pass
-            else:
-                # First attempt: use original (may be converted inside call_ocrspace_api if needed)
+            if attempt == 0:
+                # First attempt: use original image (may be converted inside API call if needed)
                 processed_path = image_path
+            else:
+                # Retry: convert to PNG
+                processed_path = convert_to_png(image_path)
+                png_path = processed_path  # remember to clean up
             ocr_text = call_ocrspace_api(api_key, processed_path)
             # If we succeeded, break
             final_ocr_text = ocr_text
@@ -482,20 +477,24 @@ def process_single(api_key: str, image_path: str, output_dir: str,
                 # Try converting to PNG and retry
                 try:
                     png_path = convert_to_png(image_path)
-                    if png_path != image_path:
-                        # Retry with PNG
-                        continue
+                    # Continue loop to retry with PNG
                 except Exception:
-                    pass
-            raise Exception(f"OCR.Space processing failed: {e}")
+                    # If conversion fails, re-raise the original error
+                    raise Exception(f"OCR.Space processing failed: {e}")
+            else:
+                # Max retries exceeded
+                raise Exception(f"OCR.Space processing failed: {e}")
         finally:
-            # Clean up temporary PNG if we created one
-            if attempt > 0:
-                try:
-                    os.remove(png_path)
-                except OSError:
-                    pass
+            # We'll clean up after the loop
+            pass
         attempt += 1
+
+    # Clean up temporary PNG if we created one
+    if png_path and os.path.exists(png_path):
+        try:
+            os.remove(png_path)
+        except OSError:
+            pass  # Ignore cleanup errors
 
     # 2. Extract date and warehouse for filename
     date_str, warehouse_str = extract_date_and_warehouse(final_ocr_text)
@@ -542,7 +541,7 @@ def process_single(api_key: str, image_path: str, output_dir: str,
         word_path = save_as_word(df, word_path, before_text, after_text)
         results['word'] = word_path
     elif save_word:
-        # No table, still create a Word doc with just the text?
+        # No table, still create a Word doc with just the text? 
         # For simplicity, we'll skip Word if no table (as per original behavior)
         pass
 
