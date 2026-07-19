@@ -96,7 +96,7 @@ class NanoNetsOCRApp:
         self.image_path = None
 
     def select_dir(self):
-        path = filedialog.askdirectory(title="選擇輸出目錄", initialdir="/mnt/e/HFDownloads/")
+        path = filedialog.askdirectory(title="選擇輸出目錄", initialdir="/mnt/e/DiskCUse/HFDownloads/")
         if path:
             self.dir_entry.delete(0, tk.END)
             self.dir_entry.insert(0, path)
@@ -105,7 +105,7 @@ class NanoNetsOCRApp:
         path = filedialog.askopenfilename(
             title="選擇圖片檔案",
             filetypes=[("Image files", "*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP *.tiff *.TIFF")],
-            initialdir="/mnt/e/HFDownloads/OCRUse02/"
+            initialdir="/mnt/e/DiskCUse/HFDownloads/OCRUse02/"
         )
         if path:
             self.image_path = path
