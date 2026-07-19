@@ -7,7 +7,7 @@ Contains the core OCR processing logic, separated from UI.
 import os
 import re
 import json
-import time
+import io
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Tuple, Optional, Any
@@ -261,30 +261,6 @@ def _merge_title_info(lines: list[str]) -> list[str]:
     return new_lines
 
 
-def extract_table_to_dataframe(md_content: str) -> pd.DataFrame:
-    """Extract the first table from Markdown content and convert to DataFrame.
-
-    Args:
-        md_content: Markdown string that may contain a table.
-
-    Returns:
-        pandas DataFrame containing the table data.
-
-    Raises:
-        ValueError: If no table is found or parsing fails.
-    """
-    # Try to extract markdown table
-    md_table = _extract_markdown_table(md_content)
-    if md_table:
-        try:
-            return pd.read_markdown(io.StringIO(md_table))
-        except (ImportError, AttributeError):
-            return _parse_markdown_table(md_table)
-        except Exception:
-            return _parse_markdown_table(md_table)
-    raise ValueError("No Markdown table found")
-
-
 def _extract_markdown_table(text: str) -> str | None:
     """Extract the first Markdown table from text.
 
@@ -326,7 +302,7 @@ def _parse_markdown_table(md_text: str) -> pd.DataFrame:
     lines = md_text.splitlines()
     data_lines = []
     for line in lines:
-        if re.search(r'^\s*\|[\s\-:]+?\|', line):
+        if re.search(r'^\s*\|\s*[-:|]+\s*\|', line):
             continue
         if '|' in line:
             stripped = line.strip('|')
@@ -343,6 +319,25 @@ def _parse_markdown_table(md_text: str) -> pd.DataFrame:
     while len(header) < max_cols:
         header.append('')
     return pd.DataFrame(data, columns=header[:max_cols])
+
+
+def extract_table_to_dataframe(md_content: str) -> pd.DataFrame:
+    """Extract the first table from Markdown content and convert to DataFrame.
+
+    Args:
+        md_content: Markdown string that may contain a table.
+
+    Returns:
+        pandas DataFrame containing the table data.
+
+    Raises:
+        ValueError: If no table is found or parsing fails.
+    """
+    # Try to extract markdown table
+    md_table = _extract_markdown_table(md_content)
+    if md_table:
+        return _parse_markdown_table(md_table)
+    raise ValueError("No Markdown table found")
 
 
 def save_as_word(df: pd.DataFrame, image_path: str, output_dir: str, md_content: str) -> str:
