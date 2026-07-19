@@ -11,7 +11,7 @@ from docx import Document
 import pandas as pd
 
 API_KEY = "09c019f3-8348-11f1-8b50-668e6851cbef"
-DEFAULT_OUTPUT_DIR = r"E:\DiskCUse\HFDownloads"
+DEFAULT_OUTPUT_DIR = "/mnt/e/DiskCUse/HFDownloads/OCRUse02"
 
 class NanoNetsOCRApp:
     def __init__(self, root):
@@ -132,15 +132,18 @@ class NanoNetsOCRApp:
         self.root.update_idletasks()
 
     def select_dir(self):
-        path = filedialog.askdirectory(title="選擇輸出目錄")
+        initial_dir = '/mnt/e/DiskCUse/HFDownloads/OCRUse02'
+        path = filedialog.askdirectory(title="選擇輸出目錄", initialdir=initial_dir)
         if path:
             self.dir_entry.delete(0, tk.END)
             self.dir_entry.insert(0, path)
 
     def select_files(self):
+        initial_dir = r'/mnt/e/DiskCUse/HFDownloads/OCRUse02'
         paths = filedialog.askopenfilenames(
             title="選擇圖片檔案",
-            filetypes=[("Image files", "*.png *.jpg *.jpeg *.webp *.bmp *.tiff")]
+            filetypes=[("Image files", "*.png *.jpg *.jpeg *.webp *.bmp *.tiff")],
+            initialdir=initial_dir
         )
         for path in paths:
             if path not in self.image_paths:
