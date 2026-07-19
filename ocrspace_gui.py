@@ -39,7 +39,7 @@ class OCRSpaceApp:
                  font=('Arial', 10)).pack(side='left')
         self.dir_entry = tk.Entry(frame_out, width=40, bg=entry_bg, fg=fg_color)
         self.dir_entry.pack(side='left', padx=5)
-        self.dir_entry.insert(0, "/mnt/e/HFDownloads/")
+        self.dir_entry.insert(0, "/mnt/e/DiskCUse/HFDownloads/")
         tk.Button(frame_out, text="瀏覽", command=self.select_dir,
                   bg=btn_bg, fg=fg_color).pack(side='left', padx=5)
 
