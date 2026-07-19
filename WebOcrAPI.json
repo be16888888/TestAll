@@ -1,0 +1,20 @@
+[
+  {
+    "ModelName": "llamaindex",
+    "url": "https://api.cloud.llamaindex.ai",
+    "base_url": "https://api.cloud.llamaindex.ai/api/v1",
+    "api_key": "llx-kp6L7gAeSDVvtfS4ZXXwkFeQNG82KfcoSxpoC1Wqga1cr5Xa"
+  },
+  {
+    "ModelName": "nanonets",
+    "url": "https://extraction-api.nanonets.com",
+    "base_url": "https://extraction-api.nanonets.com/api/v1",
+    "api_key": "09c019f3-8348-11f1-8b50-668e6851cbef"
+  },
+  {
+    "ModelName": "ocr.space",
+    "url": "https://ocr.space",
+    "base_url": "https://api.ocr.space/parse/image",
+    "api_key": "K88043760088957"
+  }
+]
