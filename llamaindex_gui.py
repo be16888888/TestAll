@@ -42,7 +42,7 @@ class LlamaCloudOCRApp:
                  font=('Arial', 10)).pack(side='left')
         self.dir_entry = tk.Entry(frame_out, width=40, bg=entry_bg, fg=fg_color)
         self.dir_entry.pack(side='left', padx=5)
-        self.dir_entry.insert(0, r"E:\DiskCUse\HFDownloads")
+        self.dir_entry.insert(0, "/mnt/e/HFDownloads/")
         tk.Button(frame_out, text="瀏覽", command=self.select_dir,
                   bg=btn_bg, fg=fg_color).pack(side='left', padx=5)
 
@@ -132,7 +132,7 @@ class LlamaCloudOCRApp:
             self.log(f"載入 WebOcrAPI.json 失敗：{e}，請手動輸入 API Key")
 
     def select_dir(self):
-        path = filedialog.askdirectory(title="選擇輸出目錄")
+        path = filedialog.askdirectory(title="選擇輸出目錄", initialdir="/mnt/e/HFDownloads/")
         if path:
             self.dir_entry.delete(0, tk.END)
             self.dir_entry.insert(0, path)
@@ -140,7 +140,8 @@ class LlamaCloudOCRApp:
     def select_file(self):
         path = filedialog.askopenfilename(
             title="選擇圖片檔案",
-            filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff *.pdf")]
+            filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp *.tiff *.pdf")],
+            initialdir="/mnt/e/HFDownloads/OCRUse02/"
         )
         if path:
             self.image_path = path
