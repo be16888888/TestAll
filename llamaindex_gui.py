@@ -7,7 +7,7 @@ Separated UI that uses llamaindex_core for processing logic.
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 import os
-from llamaindex_core import process_image, load_api_key
+from llamaindex_core import process_image, load_api_key, get_base_url
 
 
 class LlamaCloudOCRApp:
@@ -26,14 +26,11 @@ class LlamaCloudOCRApp:
                          fg=fg_color, bg=bg_color)
         title.pack(pady=10)
 
-        # API Key 輸入
-        frame_key = tk.Frame(root, bg=bg_color)
-        frame_key.pack(pady=5, fill='x', padx=20)
-        tk.Label(frame_key, text="API Key：", fg=fg_color, bg=bg_color,
-                 font=('Arial', 10)).pack(side='left')
-        self.api_entry = tk.Entry(frame_key, width=50, bg=entry_bg, fg=fg_color,
-                                  insertbackground='white')
-        self.api_entry.pack(side='left', padx=5)
+        # API Key 狀態標籤 (先建立，但不在此時載入 key)
+        self.api_key = None
+        self.api_status_label = tk.Label(root, text="API Key：尚未載入", fg='orange', bg=bg_color,
+                                         font=('Arial', 10))
+        self.api_status_label.pack(pady=2)
 
         # 輸出目錄選擇
         frame_out = tk.Frame(root, bg=bg_color)
@@ -91,45 +88,26 @@ class LlamaCloudOCRApp:
         self.log_area = scrolledtext.ScrolledText(root, height=18, bg='#1a1a1a',
                                                   fg='#00ff00', font=('Consolas', 10))
         self.log_area.pack(fill='both', expand=True, padx=20, pady=10)
-        self.log_area.insert(tk.END, "就緒，請填寫 API Key 並選擇圖片。\n")
+        self.log_area.insert(tk.END, "就緒，API Key 將從 WebOcrAPI.json 讀取。請選擇圖片。\n")
         self.log_area.config(state='disabled')
 
         self.image_path = None
 
-        # 自動載入（或建立）WebOcrAPI.json
-        self.ensure_and_load_json()
+        # 在這裡才載入 API Key，確保 log_area 已可用
+        self.load_api_key_from_core()
 
-    def ensure_and_load_json(self):
-        """確保 WebOcrAPI.json 存在，並載入 API Key"""
-        json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "WebOcrAPI.json")
-        
-        if not os.path.exists(json_path):
-            default_config = {
-                "url": "https://api.cloud.llamaindex.ai",
-                "base_url": "https://api.cloud.llamaindex.ai/api/v2",
-                "api_key": "llx-kp6L7gAeSDVvtfS4ZXXwkFeQNG82KfcoSxpoC1Wqga1cr5Xa"
-            }
-            try:
-                with open(json_path, 'w', encoding='utf-8') as f:
-                    json.dump(default_config, f, indent=2, ensure_ascii=False)
-                self.log("已自動建立 WebOcrAPI.json（內含預設 API Key）")
-            except Exception as e:
-                self.log(f"建立 WebOcrAPI.json 失敗：{e}")
-                return
-
+    def load_api_key_from_core(self):
+        """從 WebOcrAPI.json 載入 LlamaCloud 模型的 API Key 和 base URL"""
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-            api_key = config.get("api_key") or config.get("LLAMA_CLOUD_API_KEY") or config.get("API_KEY")
-            if api_key:
-                self.api_entry.delete(0, tk.END)
-                self.api_entry.insert(0, api_key)
-                self.log("已從 WebOcrAPI.json 自動載入 API Key")
-            else:
-                self.log("警告：WebOcrAPI.json 中未找到 API Key 欄位，請手動輸入")
-            self.base_url = config.get("base_url") or config.get("url") or "https://api.cloud.llamaindex.ai/api/v2"
+            api_key = load_api_key()
+            base_url = get_base_url()
+            self.api_key = api_key
+            self.base_url = base_url
+            self.api_status_label.config(text="API Key：已載入", fg='#00ff00')
+            self.log("API Key 和 Base URL 已從 WebOcrAPI.json 載入")
         except Exception as e:
-            self.log(f"載入 WebOcrAPI.json 失敗：{e}，請手動輸入 API Key")
+            self.log(f"錯誤：載入 API Key 失敗 - {e}")
+            self.api_status_label.config(text="API Key：載入失敗", fg='red')
 
     def select_dir(self):
         path = filedialog.askdirectory(title="選擇輸出目錄", initialdir="/mnt/e/HFDownloads/")
@@ -155,9 +133,8 @@ class LlamaCloudOCRApp:
         self.log_area.config(state='disabled')
 
     def process(self):
-        api_key = self.api_entry.get().strip()
-        if not api_key:
-            messagebox.showerror("錯誤", "請先輸入 API Key")
+        if not self.api_key:
+            messagebox.showerror("錯誤", "API Key 未正確載入，請檢查 WebOcrAPI.json")
             return
         if not self.image_path or not os.path.exists(self.image_path):
             messagebox.showerror("錯誤", "請先選擇有效的圖片檔案")
@@ -182,7 +159,7 @@ class LlamaCloudOCRApp:
         try:
             self.log("正在上傳圖片並呼叫 LlamaCloud API v2...")
             results = process_image(
-                api_key=api_key,
+                api_key=self.api_key,
                 image_path=self.image_path,
                 output_dir=out_dir,
                 save_word=bool(self.var_word.get()),
