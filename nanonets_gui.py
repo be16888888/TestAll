@@ -31,7 +31,7 @@ class NanoNetsOCRApp:
         frame_key.pack(pady=5, fill='x', padx=20)
         tk.Label(frame_key, text="模型：nanonets", fg=fg_color, bg=bg_color,
                  font=('Arial', 10, 'bold')).pack(side='left')
-        tk.Label(frame_key, text="（API Key 由 WebOcrAPI.json 提供）", fg='gray', bg=bg_color,
+        tk.Label(frame_key, text="(API Key 由 WebOcrAPI.json 提供)", fg='gray', bg=bg_color,
                  font=('Arial', 9)).pack(side='left', padx=5)
 
         # 輸出目錄選擇
@@ -40,10 +40,10 @@ class NanoNetsOCRApp:
         tk.Label(frame_out, text="輸出目錄：", fg=fg_color, bg=bg_color,
                  font=('Arial', 10)).pack(side='left')
         self.dir_entry = tk.Entry(frame_out, width=40, bg=entry_bg, fg=fg_color)
-                self.dir_entry.pack(side='left', padx=5)
-                self.dir_entry.insert(0, "/mnt/e/HFDownloads/")
-                tk.Button(frame_out, text="瀏覽", command=self.select_dir,
-                          bg=btn_bg, fg=fg_color).pack(side='left', padx=5)
+        self.dir_entry.pack(side='left', padx=5)
+        self.dir_entry.insert(0, "/mnt/e/HFDownloads/")
+        tk.Button(frame_out, text="瀏覽", command=self.select_dir,
+                  bg=btn_bg, fg=fg_color).pack(side='left', padx=5)
 
         # 圖片選擇
         frame_file = tk.Frame(root, bg=bg_color)
