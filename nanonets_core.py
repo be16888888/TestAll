@@ -219,6 +219,10 @@ def _generate_word_filename(before_text: str, fallback_base: str, timestamp: str
         warehouse_str = f"({wh_match.group(1)}庫)"
     if date_str and warehouse_str:
         return f"{date_str}{warehouse_str}.docx"
+    elif date_str:
+        return f"{date_str}.docx"
+    elif warehouse_str:
+        return f"{warehouse_str}.docx"
     else:
         return f"{fallback_base}_{timestamp}.docx"
 
