@@ -372,8 +372,8 @@ def _generate_word_filename(before_text: str, fallback_base: str, timestamp: str
     date_str = None
     warehouse_str = None
 
-    # Date: support Chinese year/month/day with optional spaces
-    date_match = re.search(r'(\d{2,3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)
+    # Date: support Chinese year/month/day with optional spaces (2-4 digit year)
+    date_match = re.search(r'(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)
     if date_match:
         y, m, d = date_match.groups()
         date_str = f"{y}年{m}月{d}日"
@@ -385,6 +385,10 @@ def _generate_word_filename(before_text: str, fallback_base: str, timestamp: str
 
     if date_str and warehouse_str:
         return f"{date_str}{warehouse_str}.docx"
+    elif date_str:
+        return f"{date_str}.docx"
+    elif warehouse_str:
+        return f"{warehouse_str}.docx"
     else:
         return f"{fallback_base}_{timestamp}.docx"
 
@@ -442,7 +446,7 @@ def save_as_word(df: pd.DataFrame, image_path: str, output_dir: str, before_text
     """
     base_name = os.path.splitext(os.path.basename(image_path))[0]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    word_filename = f"{base_name}_{timestamp}.docx"
+    word_filename = _generate_word_filename(before_text or "", base_name, timestamp)
     word_path = os.path.join(output_dir, word_filename)
 
     doc = Document()
