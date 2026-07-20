@@ -204,6 +204,16 @@ def split_text_around_first_table(text: str) -> tuple[str, str, str]:
         after = text[md_match.end():]
         before_clean = before.strip()
         after_clean = after.strip()
+
+        # Fix: trailing data row without leading | after a blank-line gap
+        # OCR.Space sometimes returns rows like "甜豆加工 | 46.5 | 1 | ..."
+        # (missing leading |) separated from the main table by a blank line.
+        # The regex stops at the blank line, leaving this row in after_text.
+        # Append it back to table_block so Word/Excel include it.
+        if after_clean and '\n' not in after_clean and '|' in after_clean:
+            table_block = table_block + '\n' + after_clean
+            after_clean = ''
+
         return before_clean, table_block, after_clean
 
     return text, "", ""
