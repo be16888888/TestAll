@@ -196,7 +196,7 @@ def split_text_around_first_table(text: str) -> tuple[str, str, str]:
         return before_clean, table_block, after_clean
 
     # Try Markdown table (regex-based, matches consecutive lines containing |)
-    md_pattern = re.compile(r'(^|\n)((?:[^\n]*\|[^\n]*\n)+)')
+    md_pattern = re.compile(r'(^|\n)((?:[^\n]*\|[^\n]*(?:\n|$))+)')
     md_match = md_pattern.search(text)
     if md_match:
         table_block = md_match.group(2).strip()
