@@ -1,0 +1,438 @@
+#!/usr/bin/env python3
+"""
+統一 OCR.Space / Nanonets / LlamaIndex GUI
+- 左側原圖 / 右側 Word 預覽
+- 依序嘗試 LlamaIndex -> Nanonets -> OCR.Space，一個失敗自動切下一個
+- 支援修改 API Key 並寫回 WebOcrAPI.json
+- 黑底白字、預設字體 20
+"""
+
+import tkinter as tk
+from tkinter import filedialog, messagebox, scrolledtext
+from tkinter import ttk
+import os
+import json
+import tempfile
+import webbrowser
+import threading
+import time
+from pathlib import Path
+
+from ocrspace_core import process_single as ocrspace_process, load_api_key as ocrspace_load_key
+from nanonets_core import process_single as nanonets_process, load_api_key as nanonets_load_key
+from llamaindex_core import process_image as llamaindex_process, load_api_key as llamaindex_load_key, get_base_url as llamaindex_get_base_url
+
+
+# ---------------------------
+# Style & constants
+# ---------------------------
+FG_COLOR = 'white'
+BG_COLOR = 'black'
+ENTRY_BG = '#333333'
+BTN_BG = '#555555'
+LOG_BG = '#1a1a1a'
+LOG_FG = '#00ff00'
+DEFAULT_FONT = ('Arial', 20)
+TITLE_FONT = ('Arial', 20, 'bold')
+NORMAL_FONT = ('Arial', 14)
+SMALL_FONT = ('Arial', 12)
+MONO_FONT = ('Consolas', 16)
+
+OUTPUT_DIR = r"E:\DiskCUse\HFDownloads"
+
+
+# ---------------------------
+# Helpers
+# ---------------------------
+def docx_to_html_preview(docx_path: str) -> str:
+    """Convert a simple .docx to HTML for preview in a Tkinter text widget."""
+    try:
+        from docx import Document
+        doc = Document(docx_path)
+        html = ["<html><body style='background:#000;color:#fff;font-family:Arial;'>"]
+        for p in doc.paragraphs:
+            text = p.text.strip()
+            if text:
+                html.append(f"<p>{text}</p>")
+        for table in doc.tables:
+            html.append("<table border='1' cellpadding='6' style='border-collapse:collapse;color:#fff;'>")
+            for ri, row in enumerate(table.rows):
+                tag = 'th' if ri == 0 else 'td'
+                html.append("<tr>")
+                for cell in row.cells:
+                    html.append(f"<{tag}>{cell.text}</{tag}>")
+                html.append("</tr>")
+            html.append("</table>")
+        html.append("</body></html>")
+        return "\n".join(html)
+    except Exception as e:
+        return f"<p>預覽失敗：{e}</p>"
+
+
+def time_str() -> str:
+    return time.strftime("%H:%M:%S")
+
+
+# ---------------------------
+# Main App
+# ---------------------------
+class UnifiedOCRApp:
+    def __init__(self, root: tk.Tk):
+        self.root = root
+        root.title("統一 OCR 辨識工具")
+        root.geometry("1600x920")
+        root.configure(bg=BG_COLOR)
+        root.minsize(1200, 720)
+
+        # state
+        self.image_path = None
+        self.latest_docx_path = None
+        self.running = False
+        self.api_keys = {}
+
+        # load api keys
+        self._load_all_keys()
+
+        # layout: top control bar, middle split pane, bottom log
+        self._build_top_bar()
+        self._build_middle()
+        self._build_bottom_log()
+
+    # -------------------
+    # Load / Save keys
+    # -------------------
+    def _load_all_keys(self):
+        try:
+            with open("WebOcrAPI.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            messagebox.showerror("啟動失敗", f"WebOcrAPI.json 讀取失敗：{e}")
+            data = []
+
+        for item in data if isinstance(data, list) else []:
+            name = item.get("ModelName")
+            key = item.get("api_key", "")
+            self.api_keys[name] = key
+
+        self.log(f"已載入 API Key：{list(self.api_keys.keys())}")
+
+    def _save_key_to_json(self, model_name: str, new_key: str):
+        if not new_key.strip():
+            messagebox.showwarning("提示", "API Key 不可為空，不會更新。")
+            return False
+        try:
+            with open("WebOcrAPI.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            messagebox.showerror("錯誤", f"讀取 WebOcrAPI.json 失敗：{e}")
+            return False
+
+        updated = False
+        for item in data if isinstance(data, list) else []:
+            if item.get("ModelName") == model_name:
+                item["api_key"] = new_key.strip()
+                updated = True
+                break
+
+        if not updated:
+            # append new entry
+            data.append({"ModelName": model_name, "api_key": new_key.strip()})
+
+        try:
+            with open("WebOcrAPI.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            messagebox.showerror("錯誤", f"寫入 WebOcrAPI.json 失敗：{e}")
+            return False
+
+        self.api_keys[model_name] = new_key.strip()
+        return True
+
+    # -------------------
+    # UI build
+    # -------------------
+    def _build_top_bar(self):
+        bar = tk.Frame(self.root, bg=BG_COLOR)
+        bar.pack(side='top', fill='x', padx=20, pady=10)
+
+        tk.Button(
+            bar, text="選擇圖片（仅一張）", command=self.select_file,
+            bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=20, pady=8
+        ).pack(side='left', padx=10)
+
+        self.file_label = tk.Label(bar, text="尚未選擇圖片", fg='gray', bg=BG_COLOR, font=SMALL_FONT)
+        self.file_label.pack(side='left', padx=10)
+
+        tk.Button(
+            bar, text="開始辨識", command=self.start_process,
+            bg='#0066cc', fg=FG_COLOR, font=SMALL_FONT, padx=24, pady=8
+        ).pack(side='left', padx=10)
+
+        tk.Button(
+            bar, text="修改 API Key", command=self.open_api_manager,
+            bg='#885500', fg=FG_COLOR, font=SMALL_FONT, padx=20, pady=8
+        ).pack(side='left', padx=10)
+
+        tk.Label(bar, text="輸出：", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT).pack(side='left', padx=10)
+        self.out_var = tk.StringVar(value=OUTPUT_DIR)
+        tk.Entry(bar, textvariable=self.out_var, width=42, bg=ENTRY_BG, fg=FG_COLOR, font=SMALL_FONT).pack(side='left', padx=5)
+        tk.Button(bar, text="瀏覽", command=self.select_out_dir, bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT).pack(side='left')
+
+    def _build_middle(self):
+        mid = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, bg=BG_COLOR, sashwidth=8)
+        mid.pack(fill='both', expand=True, padx=20, pady=8)
+
+        # left: image
+        left = tk.Frame(mid, bg=BG_COLOR)
+        tk.Label(left, text="原圖", fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(anchor='w')
+        self.image_canvas = tk.Canvas(left, bg='#111111', highlightthickness=1, highlightbackground='#555555')
+        self.image_canvas.pack(fill='both', expand=True)
+        self.image_canvas.bind("<Configure>", lambda e: self._draw_image_preview())
+        self.preview_photo = None
+        mid.add(left, minsize=400)
+
+        # right: preview + save controls
+        right = tk.Frame(mid, bg=BG_COLOR)
+        tk.Label(right, text="Word 預覽", fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(anchor='w')
+        self.preview_text = scrolledtext.ScrolledText(
+            right, wrap='word', bg=LOG_BG, fg=LOG_FG,
+            font=MONO_FONT, state='disabled'
+        )
+        self.preview_text.pack(fill='both', expand=True)
+        mid.add(right, minsize=500)
+
+    def _build_bottom_log(self):
+        bottom = tk.Frame(self.root, bg=BG_COLOR)
+        bottom.pack(side='bottom', fill='both', expand=False, padx=20, pady=(0, 12))
+        tk.Label(bottom, text="處理日誌", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT).pack(anchor='w')
+        self.log_area = scrolledtext.ScrolledText(
+            bottom, height=8, bg=LOG_BG, fg=LOG_FG,
+            font=MONO_FONT, state='disabled'
+        )
+        self.log_area.pack(fill='both', expand=True)
+
+    # -------------------
+    # Image preview
+    # -------------------
+    def select_file(self):
+        path = filedialog.askopenfilename(
+            title="選擇圖片檔案",
+            filetypes=[("Image files", "*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP *.tiff *.TIFF *.webp *.WEBP")],
+            initialdir=OUTPUT_DIR
+        )
+        if path:
+            self.image_path = path
+            self.file_label.config(text=os.path.basename(path), fg='white')
+            self.log(f"已選擇：{path}")
+            self.latest_docx_path = None
+            self.preview_text.config(state='normal')
+            self.preview_text.delete('1.0', 'end')
+            self.preview_text.config(state='disabled')
+            self._draw_image_preview()
+
+    def _draw_image_preview(self):
+        if not self.image_path:
+            self.image_canvas.delete("all")
+            self.image_canvas.create_text(
+                self.image_canvas.winfo_width() / 2,
+                self.image_canvas.winfo_height() / 2,
+                text="尚未選擇圖片", fill='#888888', font=SMALL_FONT
+            )
+            return
+        try:
+            from PIL import Image, ImageTk
+            img = Image.open(self.image_path)
+            # fit to canvas
+            cw = max(self.image_canvas.winfo_width(), 400)
+            ch = max(self.image_canvas.winfo_height(), 300)
+            img_ratio = img.width / img.height
+            canvas_ratio = cw / ch
+            if img_ratio > canvas_ratio:
+                new_w = cw
+                new_h = int(cw / img_ratio)
+            else:
+                new_h = ch
+                new_w = int(ch * img_ratio)
+            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            self.preview_photo = ImageTk.PhotoImage(img)
+            self.image_canvas.delete("all")
+            self.image_canvas.create_image(cw // 2, ch // 2, image=self.preview_photo, anchor='center')
+        except Exception as e:
+            self.log(f"圖片預覽失敗：{e}")
+
+    # -------------------
+    # Output dir
+    # -------------------
+    def select_out_dir(self):
+        path = filedialog.askdirectory(title="選擇輸出目錄", initialdir=OUTPUT_DIR)
+        if path:
+            self.out_var.set(path)
+
+    # -------------------
+    # API manager
+    # -------------------
+    def open_api_manager(self):
+        win = tk.Toplevel(self.root)
+        win.title("修改 API Key")
+        win.geometry("780x520")
+        win.configure(bg=BG_COLOR)
+
+        tk.Label(win, text="模型", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT, width=12, anchor='w').grid(row=0, column=0, padx=10, pady=10)
+        tk.Label(win, text="原始 API Key", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT, width=14, anchor='w').grid(row=0, column=1, padx=10, pady=10)
+
+        model_names = ["llamaindex", "nanonets", "ocr.space"]
+        entries = {}
+        for i, name in enumerate(model_names, start=1):
+            tk.Label(win, text=name, fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT, width=12, anchor='w').grid(row=i, column=0, padx=10, pady=8, sticky='w')
+            var = tk.StringVar(value=self.api_keys.get(name, ""))
+            e = tk.Entry(win, textvariable=var, width=58, bg=ENTRY_BG, fg=FG_COLOR, font=SMALL_FONT)
+            e.grid(row=i, column=1, padx=10, pady=8)
+            entries[name] = var
+
+        status = tk.Label(win, text="", fg='orange', bg=BG_COLOR, font=SMALL_FONT)
+        status.grid(row=4, column=0, columnspan=2, sticky='w', padx=10)
+
+        def save_all():
+            changed = False
+            for name, var in entries.items():
+                new_key = var.get()
+                if self.api_keys.get(name) != new_key:
+                    if self._save_key_to_json(name, new_key):
+                        status.config(text=f"已更新：{name}", fg='#00ff00')
+                        changed = True
+                    else:
+                        status.config(text=f"更新失敗：{name}", fg='red')
+                        return
+            if not changed:
+                status.config(text="無變更", fg='orange')
+            else:
+                self.log("API Key 已更新並寫回 WebOcrAPI.json")
+
+        tk.Button(win, text="儲存全部修改", command=save_all, bg='#0066cc', fg=FG_COLOR, font=SMALL_FONT, padx=16, pady=6).grid(row=5, column=1, sticky='e', padx=10, pady=12)
+
+    # -------------------
+    # Process
+    # -------------------
+    def start_process(self):
+        if self.running:
+            messagebox.showinfo("提示", "正在處理中，請稍候。")
+            return
+        if not self.image_path or not os.path.exists(self.image_path):
+            messagebox.showerror("錯誤", "請先選擇有效的圖片檔案")
+            return
+
+        out_dir = self.out_var.get().strip()
+        if not out_dir:
+            out_dir = OUTPUT_DIR
+        os.makedirs(out_dir, exist_ok=True)
+
+        self.running = True
+        self.log("開始依序嘗試：LlamaIndex -> Nanonets -> OCR.Space")
+        threading.Thread(target=self._process_worker, args=(out_dir,), daemon=True).start()
+
+    def _process_worker(self, out_dir: str):
+        errors = []
+        engine_results = {}
+        last_docx = None
+
+        # 1) LlamaIndex
+        try:
+            self.log("[核心] LlamaIndex 開始辨識 ...")
+            res = llamaindex_process(
+                api_key=self.api_keys.get("llamaindex", ""),
+                image_path=self.image_path,
+                output_dir=out_dir,
+                save_word=True,
+                save_excel=False,
+                save_html=False,
+                save_md=False,
+            )
+            engine_results["llamaindex"] = res
+            last_docx = res.get("word")
+            self.log(f"[核心] LlamaIndex 完成：{res}")
+        except Exception as e:
+            msg = str(e)
+            errors.append(f"LlamaIndex 失敗：{msg}")
+            self.log(f"[核心] LlamaIndex 失敗：{msg}")
+
+        # 2) Nanonets
+        if not last_docx:
+            try:
+                self.log("[核心] Nanonets 開始辨識 ...")
+                res = nanonets_process(
+                    api_key=self.api_keys.get("nanonets", ""),
+                    image_path=self.image_path,
+                    output_dir=out_dir,
+                    save_word=True,
+                    save_excel=False,
+                    save_md=False,
+                )
+                engine_results["nanonets"] = res
+                last_docx = res.get("word")
+                self.log(f"[核心] Nanonets 完成：{res}")
+            except Exception as e:
+                msg = str(e)
+                errors.append(f"Nanonets 失敗：{msg}")
+                self.log(f"[核心] Nanonets 失敗：{msg}")
+
+        # 3) OCR.Space
+        if not last_docx:
+            try:
+                self.log("[核心] OCR.Space 開始辨識 ...")
+                res = ocrspace_process(
+                    api_key=self.api_keys.get("ocr.space", ""),
+                    image_path=self.image_path,
+                    output_dir=out_dir,
+                    save_word=True,
+                    save_excel=False,
+                    save_text=False,
+                    save_md=False,
+                )
+                engine_results["ocrspace"] = res
+                last_docx = res.get("word")
+                self.log(f"[核心] OCR.Space 完成：{res}")
+            except Exception as e:
+                msg = str(e)
+                errors.append(f"OCR.Space 失敗：{msg}")
+                self.log(f"[核心] OCR.Space 失敗：{msg}")
+
+        if last_docx and os.path.exists(last_docx):
+            self.latest_docx_path = last_docx
+            self.root.after(0, lambda: self._preview_docx(last_docx))
+            self.root.after(0, lambda: messagebox.showinfo("完成", f"辨識完成\nWord：{last_docx}"))
+            self.log(f"完成：{last_docx}")
+        elif errors:
+            self.root.after(0, lambda: messagebox.showerror("全部失敗", "\n".join(errors)))
+            self.log("全部引擎皆失敗。")
+        else:
+            self.root.after(0, lambda: messagebox.showwarning("未完成", "已處理，但未產出 Word。"))
+            self.log("已處理，但未產出 Word。")
+
+        self.running = False
+
+    def _preview_docx(self, docx_path: str):
+        self.preview_text.config(state='normal')
+        self.preview_text.delete('1.0', 'end')
+        html = docx_to_html_preview(docx_path)
+        self.preview_text.insert('1.0', html)
+        self.preview_text.config(state='disabled')
+
+    # -------------------
+    # Logging
+    # -------------------
+    def log(self, msg: str):
+        line = f"[{time_str()}] {msg}"
+        self.log_area.config(state='normal')
+        self.log_area.insert(tk.END, line + "\n")
+        self.log_area.see(tk.END)
+        self.log_area.config(state='disabled')
+
+
+def main():
+    root = tk.Tk()
+    app = UnifiedOCRApp(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
