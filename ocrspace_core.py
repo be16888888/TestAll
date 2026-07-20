@@ -142,8 +142,8 @@ def call_ocrspace_api(api_key: str, image_path: str,
         raise Exception("OCR result is empty")
     
     # Check for common OCR failure indicators that should trigger a retry
-    if "[No text detected]" in parsed_text or "キュー" in parsed_text:
-        raise Exception("OCR detected no text or garbled output - trigger retry")
+    if "[No text detected]" in parsed_text:
+        raise Exception("OCR detected no text - trigger retry")
 
     return parsed_text
 
