@@ -208,9 +208,7 @@ def _generate_word_filename(before_text: str, fallback_base: str, timestamp: str
     """
     date_str = None
     warehouse_str = None
-    date_match = re.search(r'(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)\n        y, m, d = date_match.groups()
-    date_match = re.search(r'(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)\n    if date_match:\n    wh_match = re.search(r'\((\d{1,3}(?:-\d{1,2})?)\s*庫\)', before_text)
-    if wh_match:
+    date_match = re.search(r'(\\d{2,4})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日', before_text)\n    if date_match:\n    if wh_match:
         warehouse_str = f"({wh_match.group(1)}庫)"
     if date_str and warehouse_str:
         return f"{date_str}{warehouse_str}.docx"
