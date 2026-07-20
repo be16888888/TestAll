@@ -2,7 +2,7 @@
   {
     "ModelName": "llamaindex",
     "url": "https://api.cloud.llamaindex.ai",
-    "base_url": "https://api.cloud.llamaindex.ai/api/v1",
+    "base_url": "https://api.cloud.llamaindex.ai/api/v2",
     "api_key": "llx-kp6L7gAeSDVvtfS4ZXXwkFeQNG82KfcoSxpoC1Wqga1cr5Xa"
   },
   {
