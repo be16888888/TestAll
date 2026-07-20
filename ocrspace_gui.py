@@ -110,7 +110,7 @@ class OCRSpaceApp:
             self.api_status_label.config(text="API Key：載入失敗", fg='red')
 
     def select_dir(self):
-        path = filedialog.askdirectory(title="選擇輸出目錄", initialdir="/mnt/e/DiskCUse/HFDownloads/")
+        path = filedialog.askdirectory(title="選擇輸出目錄", initialdir="/mnt/e/HFDownloads/")
         if path:
             self.dir_entry.delete(0, tk.END)
             self.dir_entry.insert(0, path)
