@@ -486,13 +486,13 @@ def process_single(api_key: str, image_path: str, output_dir: str,
             else:
                 raise Exception(f"OCR.Space processing failed: {e}")
         attempt += 1
-    finally:
-        # Clean up temporary PNG if we created one
-        if png_path and os.path.exists(png_path):
-            try:
-                os.remove(png_path)
-            except OSError:
-                pass  # Ignore cleanup errors
+
+    # Clean up temporary PNG if we created one
+    if png_path and os.path.exists(png_path):
+        try:
+            os.remove(png_path)
+        except OSError:
+            pass  # Ignore cleanup errors
 
     # 2. Extract date and warehouse for filename
     date_str, warehouse_str = extract_date_and_warehouse(final_ocr_text)
