@@ -116,8 +116,8 @@ def call_ocrspace_api(api_key: str, image_path: str,
         files = {"file": (os.path.basename(image_path), f)}
         data = {
             "language": language,
-            "isOverlayRequired": str(isOverlayRequired).lower(),
-            "isTable": str(isTable).lower(),
+            "isOverlayRequired": isOverlayRequired,
+            "isTable": isTable,
             "OCREngine": OCREngine,
         }
         response = requests.post(url, headers=headers, files=files, data=data, timeout=120)
