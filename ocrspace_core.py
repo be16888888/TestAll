@@ -316,7 +316,7 @@ def save_as_word(df: pd.DataFrame, filename: str, before_text: str, after_text: 
         for line in merged:
             doc.add_paragraph(line)
 
-    if df.shape[1] > 0:
+    if df is not None and not df.empty and df.shape[1] > 0:
         table = doc.add_table(rows=df.shape[0] + 1, cols=df.shape[1])
         table.style = 'Table Grid'
         for j, col_name in enumerate(df.columns):
