@@ -120,7 +120,17 @@ def call_llamacloud_api(api_key: str, image_path: str, base_url: str) -> dict:
         raise Exception(f"Upload failed (HTTP {response.status_code}): {response.text}")
 
     job_json = response.json()
+
+    # Check if the upload response already contains the completed result
+    status = (job_json.get("status") or "").lower()
+    if status == "completed":
+        return _extract_llamacloud_result(job_json)
+
+    # If not completed, poll with job id
     job_id = job_json.get("id")
+    if not job_id:
+        # Fallback: maybe under "job" key
+        job_id = job_json.get("job", {}).get("id")
     if not job_id:
         raise Exception(f"Failed to get job ID from response: {job_json}")
 
@@ -136,32 +146,10 @@ def call_llamacloud_api(api_key: str, image_path: str, base_url: str) -> dict:
         status_json = resp.json()
         # The response may have a 'job' object or direct fields
         job = status_json.get("job", {})
-        status = job.get("status") or status_json.get("status")
+        status = (job.get("status") or status_json.get("status") or "").lower()
 
         if status == "completed":
-            # Extract markdown content
-            markdown_data = status_json.get("markdown") or job.get("markdown")
-            if markdown_data:
-                if isinstance(markdown_data, dict) and "pages" in markdown_data:
-                    pages = markdown_data.get("pages", [])
-                    pages.sort(key=lambda x: x.get("page_number", 0))
-                    full_md = "\n".join([p.get("markdown", "") for p in pages if p.get("markdown")])
-                    if full_md:
-                        return {"markdown": {"content": full_md}}
-                elif isinstance(markdown_data, str):
-                    return {"markdown": {"content": markdown_data}}
-
-            # Fallback: try to get content from result or text fields
-            result = status_json.get("result", {})
-            content = result.get("markdown") or result.get("content") or result.get("text")
-            if content:
-                return {"markdown": {"content": content}}
-
-            text = status_json.get("text") or job.get("text")
-            if text:
-                return {"markdown": {"content": text}}
-
-            raise Exception("Completed but no markdown content found")
+            return _extract_llamacloud_result(status_json)
 
         elif status in ("failed", "error"):
             error_msg = job.get("error_message") or status_json.get("error_message") or "Unknown error"
@@ -171,6 +159,32 @@ def call_llamacloud_api(api_key: str, image_path: str, base_url: str) -> dict:
         time.sleep(2)
 
     raise Exception("Polling timeout - processing did not complete within 2 minutes")
+
+
+def _extract_llamacloud_result(data: dict) -> dict:
+    """Extract markdown content from a LlamaCloud API response (upload or status).
+
+    Returns a dict compatible with the rest of the pipeline: {"markdown": {"content": "..."}}
+    """
+    job = data.get("job", {})
+    markdown_data = data.get("markdown") or job.get("markdown")
+    
+    if markdown_data:
+        if isinstance(markdown_data, dict) and "pages" in markdown_data:
+            pages = markdown_data.get("pages", [])
+            pages.sort(key=lambda x: x.get("page_number", 0))
+            full_md = "\n".join([p.get("markdown", "") for p in pages if p.get("markdown")])
+            if full_md:
+                return {"markdown": {"content": full_md}}
+        elif isinstance(markdown_data, str):
+            return {"markdown": {"content": markdown_data}}
+
+    # Fallback: try text fields
+    text = data.get("text") or job.get("text")
+    if text:
+        return {"markdown": {"content": text}}
+
+    raise Exception("Completed but no markdown content found")
 
 
 def extract_markdown_content(json_data: dict) -> str:
