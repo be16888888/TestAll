@@ -556,7 +556,7 @@ def process_single(api_key: str, image_path: str, output_dir: str,
                 df = None
             
             # Also check for OCR failure indicators that should trigger PNG retry
-            if "[No text detected]" in table_ocr_text or "キュー" in table_ocr_text:
+            if "[No text detected]" in table_ocr_text:
                 need_retry = True
                 
             if not need_retry:
