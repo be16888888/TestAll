@@ -546,9 +546,11 @@ def process_single(api_key: str, image_path: str, output_dir: str,
             if table_block:
                 df = extract_table_to_dataframe_from_block(table_block)
                 df = fix_table_columns(df)
-                # Original behaviour: when the table doesn't have the expected
-                # 8 columns, treat it as a bad parse and retry with PNG.
-                if df is not None and not df.empty and df.shape[1] != 8:
+                # Only retry when the parse result is too small to be a real table
+                # (e.g., a header-only split with 1 column). Accept any reasonably
+                # wide table so that forms with 7 columns (missing last column)
+                # still produce correct Word/Excel output.
+                if df is not None and not df.empty and df.shape[1] < 3:
                     need_retry = True
             else:
                 df = None
