@@ -145,11 +145,6 @@ def call_ocrspace_api(api_key: str, image_path: str,
     # Check for common OCR failure indicators that should trigger a retry
     if "[No text detected]" in parsed_text:
         raise Exception("OCR detected no text - trigger retry")
-    # Only reject when the whole result is pure Japanese noise.
-    # If "キュー" appears inside otherwise valid OCR output, keep it
-    # and let later stages / the user decide.
-    if parsed_text.strip() == "キュー":
-        raise Exception("OCR produced only garbled output - trigger retry")
 
     return parsed_text
 
