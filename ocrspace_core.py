@@ -526,7 +526,9 @@ def process_single(api_key: str, image_path: str, output_dir: str,
             f.write(final_ocr_text)
         results['md'] = md_path
 
-    # 5. Extract table + PNG retry on table failure
+    # 5. Extract table + PNG retry on table failure OR column-count mismatch
+    #    (matches original behaviour: JPG→PNG retry when table parsing yields
+    #     wrong column count, e.g. not 8 columns for the stock form)
     df = None
     before_text = ""
     after_text = ""
@@ -535,33 +537,41 @@ def process_single(api_key: str, image_path: str, output_dir: str,
     max_table_retries = 1
     table_attempt = 0
     while table_attempt <= max_table_retries:
+        need_retry = False
         try:
             before_text, table_block, after_text = split_text_around_first_table(table_ocr_text)
             if table_block:
                 df = extract_table_to_dataframe_from_block(table_block)
                 df = fix_table_columns(df)
+                # Original behaviour: when the table doesn't have the expected
+                # 8 columns, treat it as a bad parse and retry with PNG.
+                if df is not None and not df.empty and df.shape[1] != 8:
+                    need_retry = True
             else:
                 df = None
-            break  # Success or no table found
+            if not need_retry:
+                break  # Success or no table found
         except Exception as e:
-            if table_attempt < max_table_retries:
-                # Table parsing failed — retry with PNG
+            need_retry = True
+
+        if table_attempt < max_table_retries:
+            # Table parsing failed or wrong column count — retry with PNG
+            try:
+                png_path = convert_to_png(image_path)
+                table_ocr_text = call_ocrspace_api(api_key, png_path,
+                                                   language=language,
+                                                   isTable=isTable)
                 try:
-                    png_path = convert_to_png(image_path)
-                    table_ocr_text = call_ocrspace_api(api_key, png_path,
-                                                       language=language,
-                                                       isTable=isTable)
-                    try:
-                        if png_path != image_path:
-                            os.remove(png_path)
-                    except OSError:
-                        pass
-                except Exception:
-                    df = None
-                    break
-            else:
+                    if png_path != image_path:
+                        os.remove(png_path)
+                except OSError:
+                    pass
+            except Exception:
                 df = None
                 break
+        else:
+            df = None
+            break
         table_attempt += 1
 
     # 6. Save Word always (even without table — matches original behaviour)
