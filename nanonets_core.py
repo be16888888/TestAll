@@ -354,7 +354,10 @@ def save_as_word(df: pd.DataFrame, image_path: str, output_dir: str, md_content:
     """
     base_name = os.path.splitext(os.path.basename(image_path))[0]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    word_filename = f"{base_name}_{timestamp}.docx"
+
+    # Extract text before table for auto-naming (date + warehouse)
+    before_text, _ = _split_md_around_table(md_content)
+    word_filename = _generate_word_filename(before_text, base_name, timestamp)
     word_path = os.path.join(output_dir, word_filename)
 
     doc = Document()
@@ -364,7 +367,6 @@ def save_as_word(df: pd.DataFrame, image_path: str, output_dir: str, md_content:
     section.left_margin = Cm(1)
     section.right_margin = Cm(1)
 
-    before_text, after_text = _split_md_around_table(md_content)
     if before_text:
         before_lines = [line.strip() for line in before_text.split('\n') if line.strip()]
         merged_lines = _merge_title_info(before_lines)
