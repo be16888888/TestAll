@@ -221,7 +221,7 @@ class UnifiedOCRApp:
         path = filedialog.askopenfilename(
             title="選擇圖片檔案",
             filetypes=[("Image files", "*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP *.tiff *.TIFF *.webp *.WEBP")],
-            initialdir=OUTPUT_DIR
+            initialdir=r"E:\DiskCUse\HFDownloads\OCRUse02"
         )
         if path:
             self.image_path = path
