@@ -166,7 +166,9 @@ class OCRSpaceApp:
                 save_word=bool(self.var_word.get()),
                 save_excel=bool(self.var_excel.get()),
                 save_text=bool(self.var_text.get()),
-                save_md=bool(self.var_md.get())
+                save_md=bool(self.var_md.get()),
+                language='cht',
+                isTable=isTable
             )
             
             self.log(f"API 呼叫成功，正在處理結果...")
