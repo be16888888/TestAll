@@ -209,7 +209,7 @@ def _generate_word_filename(before_text: str, fallback_base: str, timestamp: str
     date_str = None
     warehouse_str = None
     # Date: support Chinese year/month/day with optional spaces
-    date_match = re.search(r'(\d{2,3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)
+    date_match = re.search(r'(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)
     if date_match:
         y, m, d = date_match.groups()
         date_str = f"{y}年{m}月{d}日"
