@@ -195,29 +195,16 @@ def split_text_around_first_table(text: str) -> tuple[str, str, str]:
         after_clean = _html_to_plaintext(after)
         return before_clean, table_block, after_clean
 
-    # Try Markdown table
-    lines = text.splitlines()
-    table_start = None
-    table_end = None
-    in_table = False
-    for i, line in enumerate(lines):
-        if '|' in line and (line.strip().startswith('|') or line.strip().endswith('|')):
-            if not in_table:
-                in_table = True
-                table_start = i
-        else:
-            if in_table:
-                table_end = i
-                break
-    if table_start is not None:
-        if table_end is None:
-            table_end = len(lines)
-        before_lines = lines[:table_start]
-        after_lines = lines[table_end:]
-        before_text = "\n".join(before_lines).strip()
-        after_text = "\n".join(after_lines).strip()
-        table_block = "\n".join(lines[table_start:table_end]).strip()
-        return before_text, table_block, after_text
+    # Try Markdown table (regex-based, matches consecutive lines containing |)
+    md_pattern = re.compile(r'(^|\n)((?:[^\n]*\|[^\n]*\n)+)')
+    md_match = md_pattern.search(text)
+    if md_match:
+        table_block = md_match.group(2).strip()
+        before = text[:md_match.start()]
+        after = text[md_match.end():]
+        before_clean = before.strip()
+        after_clean = after.strip()
+        return before_clean, table_block, after_clean
 
     return text, "", ""
 
