@@ -121,15 +121,16 @@ def call_llamacloud_api(api_key: str, image_path: str, base_url: str) -> dict:
 
     job_json = response.json()
 
-    # Check if the upload response already contains the completed result
-    status = (job_json.get("status") or "").lower()
-    if status == "completed":
+    # Try to extract result from the upload response first (some images return
+    # markdown immediately; others don't).  If markdown is present, return it.
+    try:
         return _extract_llamacloud_result(job_json)
+    except Exception:
+        pass  # markdown not in upload response → poll
 
-    # If not completed, poll with job id
+    # Poll with job id
     job_id = job_json.get("id")
     if not job_id:
-        # Fallback: maybe under "job" key
         job_id = job_json.get("job", {}).get("id")
     if not job_id:
         raise Exception(f"Failed to get job ID from response: {job_json}")
