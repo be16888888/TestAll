@@ -436,7 +436,8 @@ def _merge_title_info(lines: list[str]) -> list[str]:
 
 def process_single(api_key: str, image_path: str, output_dir: str,
                    save_word: bool = True, save_excel: bool = True,
-                   save_text: bool = True, save_md: bool = True) -> Dict[str, str]:
+                   save_text: bool = True, save_md: bool = True,
+                   language: str = 'cht', isTable: bool = True) -> Dict[str, str]:
     """Process a single image through the full OCR.Space OCR pipeline.
 
     Args:
@@ -447,6 +448,8 @@ def process_single(api_key: str, image_path: str, output_dir: str,
         save_excel: Whether to save an Excel file.
         save_text: Whether to save a plain text file.
         save_md: Whether to save a Markdown file.
+        language: Language code (default 'cht' for Traditional Chinese).
+        isTable: Whether to enable table recognition.
 
     Returns:
         Dictionary with keys 'txt', 'md', 'word', 'excel' (if saved) mapping to file paths.
@@ -454,7 +457,7 @@ def process_single(api_key: str, image_path: str, output_dir: str,
     Raises:
         Exception: If any step in the processing fails.
     """
-    # 1. Format conversion (may retry with PNG)
+    # 1. API call with PNG retry on failure
     max_retries = 1
     attempt = 0
     final_ocr_text = ""
@@ -462,14 +465,15 @@ def process_single(api_key: str, image_path: str, output_dir: str,
     while attempt <= max_retries:
         try:
             if attempt == 0:
-                # First attempt: use original image (may be converted inside API call if needed)
+                # First attempt: use original image
                 processed_path = image_path
             else:
                 # Retry: convert to PNG
                 processed_path = convert_to_png(image_path)
                 png_path = processed_path  # remember to clean up
-            ocr_text = call_ocrspace_api(api_key, processed_path)
-            # If we succeeded, break
+            ocr_text = call_ocrspace_api(api_key, processed_path,
+                                         language=language,
+                                         isTable=isTable)
             final_ocr_text = ocr_text
             break
         except Exception as e:
@@ -477,24 +481,18 @@ def process_single(api_key: str, image_path: str, output_dir: str,
                 # Try converting to PNG and retry
                 try:
                     png_path = convert_to_png(image_path)
-                    # Continue loop to retry with PNG
                 except Exception:
-                    # If conversion fails, re-raise the original error
                     raise Exception(f"OCR.Space processing failed: {e}")
             else:
-                # Max retries exceeded
                 raise Exception(f"OCR.Space processing failed: {e}")
-        finally:
-            # We'll clean up after the loop
-            pass
         attempt += 1
-
-    # Clean up temporary PNG if we created one
-    if png_path and os.path.exists(png_path):
-        try:
-            os.remove(png_path)
-        except OSError:
-            pass  # Ignore cleanup errors
+    finally:
+        # Clean up temporary PNG if we created one
+        if png_path and os.path.exists(png_path):
+            try:
+                os.remove(png_path)
+            except OSError:
+                pass  # Ignore cleanup errors
 
     # 2. Extract date and warehouse for filename
     date_str, warehouse_str = extract_date_and_warehouse(final_ocr_text)
@@ -505,51 +503,79 @@ def process_single(api_key: str, image_path: str, output_dir: str,
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_filename = f"{base_name}_{timestamp}"
 
-    out_dir = output_dir
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     results = {}
 
-    # 3. Save text file
+    # 3. Save text file (with base_filename)
     if save_text:
-        txt_path = save_as_text(final_ocr_text, image_path, out_dir)
+        txt_filename = f"{base_filename}.txt"
+        txt_path = os.path.join(output_dir, txt_filename)
+        with open(txt_path, 'w', encoding='utf-8') as f:
+            f.write(final_ocr_text)
         results['txt'] = txt_path
 
-    # 4. Save markdown file
+    # 4. Save markdown file (with base_filename)
     if save_md:
-        md_path = save_as_md(final_ocr_text, image_path, out_dir)
+        md_filename = f"{base_filename}.md"
+        md_path = os.path.join(output_dir, md_filename)
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(f"# OCR Results - {os.path.basename(image_path)}\n\n")
+            f.write(f"**Processing Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(final_ocr_text)
         results['md'] = md_path
 
-    # 5. Extract table and save Word/Excel if requested
+    # 5. Extract table + PNG retry on table failure
     df = None
-    if save_word or save_excel:
+    before_text = ""
+    after_text = ""
+    table_ocr_text = final_ocr_text
+
+    max_table_retries = 1
+    table_attempt = 0
+    while table_attempt <= max_table_retries:
         try:
-            before_text, table_block, after_text = split_text_around_first_table(final_ocr_text)
+            before_text, table_block, after_text = split_text_around_first_table(table_ocr_text)
             if table_block:
                 df = extract_table_to_dataframe_from_block(table_block)
                 df = fix_table_columns(df)
             else:
                 df = None
-        except Exception:
-            df = None
+            break  # Success or no table found
+        except Exception as e:
+            if table_attempt < max_table_retries:
+                # Table parsing failed — retry with PNG
+                try:
+                    png_path = convert_to_png(image_path)
+                    table_ocr_text = call_ocrspace_api(api_key, png_path,
+                                                       language=language,
+                                                       isTable=isTable)
+                    try:
+                        if png_path != image_path:
+                            os.remove(png_path)
+                    except OSError:
+                        pass
+                except Exception:
+                    df = None
+                    break
+            else:
+                df = None
+                break
+        table_attempt += 1
 
-    if save_word and df is not None and not df.empty:
-        # Generate filename based on date/warehouse if possible
+    # 6. Save Word always (even without table — matches original behaviour)
+    if save_word:
         word_filename = f"{base_filename}.docx"
-        word_path = os.path.join(out_dir, word_filename)
-        word_path = save_as_word(df, word_path, before_text, after_text)
+        word_path = save_as_word(df, os.path.join(output_dir, word_filename),
+                                 before_text, after_text)
         results['word'] = word_path
-    elif save_word:
-        # No table, still create a Word doc with just the text? 
-        # For simplicity, we'll skip Word if no table (as per original behavior)
-        pass
 
+    # 7. Save Excel (with base_filename, only if table exists)
     if save_excel and df is not None and not df.empty:
-        excel_path = save_as_excel(df, image_path, out_dir)
+        excel_filename = f"{base_filename}.xlsx"
+        excel_path = os.path.join(output_dir, excel_filename)
+        df.to_excel(excel_path, index=False)
         results['excel'] = excel_path
-    elif save_excel:
-        # No table, skip Excel
-        pass
 
     return results
