@@ -114,10 +114,11 @@ def call_ocrspace_api(api_key: str, image_path: str,
     headers = {"apikey": api_key}
     with open(image_path, 'rb') as f:
         files = {"file": (os.path.basename(image_path), f)}
+        # OCR.Space API expects string values "true"/"false" for boolean parameters
         data = {
             "language": language,
-            "isOverlayRequired": isOverlayRequired,
-            "isTable": isTable,
+            "isOverlayRequired": "true" if isOverlayRequired else "false",
+            "isTable": "true" if isTable else "false",
             "OCREngine": OCREngine,
         }
         response = requests.post(url, headers=headers, files=files, data=data, timeout=120)
@@ -140,6 +141,10 @@ def call_ocrspace_api(api_key: str, image_path: str,
     parsed_text = parsed_results[0].get("ParsedText", "")
     if not parsed_text:
         raise Exception("OCR result is empty")
+
+    # Check for common OCR failure indicators that should trigger a retry
+    if "[No text detected]" in parsed_text or "キュー" in parsed_text:
+        raise Exception("OCR detected no text or garbled output - trigger retry")
 
     return parsed_text
 
@@ -419,7 +424,8 @@ def _merge_title_info(lines: list[str]) -> list[str]:
                 if any(next_line.startswith(prefix) for prefix in [
                     '**日期：**', '日期：',
                     '**填單者：**', '填單者：',
-                    '**單位：**', '單位：'
+                    '**單位：**', '單位：',
+                    '日期：', '填單者：', '單位：'  # also match without markdown
                 ]):
                     combined.append(next_line)
                     j += 1
@@ -526,7 +532,7 @@ def process_single(api_key: str, image_path: str, output_dir: str,
             f.write(final_ocr_text)
         results['md'] = md_path
 
-    # 5. Extract table + PNG retry on table failure OR column-count mismatch
+    # 5. Extract table + PNG retry on table failure OR column-count mismatch OR "[No text detected]"
     #    (matches original behaviour: JPG→PNG retry when table parsing yields
     #     wrong column count, e.g. not 8 columns for the stock form)
     df = None
@@ -549,13 +555,18 @@ def process_single(api_key: str, image_path: str, output_dir: str,
                     need_retry = True
             else:
                 df = None
+            
+            # Also check for OCR failure indicators that should trigger PNG retry
+            if "[No text detected]" in table_ocr_text or "キュー" in table_ocr_text:
+                need_retry = True
+                
             if not need_retry:
                 break  # Success or no table found
         except Exception as e:
             need_retry = True
 
         if table_attempt < max_table_retries:
-            # Table parsing failed or wrong column count — retry with PNG
+            # Table parsing failed or wrong column count or OCR failure — retry with PNG
             try:
                 png_path = convert_to_png(image_path)
                 table_ocr_text = call_ocrspace_api(api_key, png_path,
