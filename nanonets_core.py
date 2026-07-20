@@ -208,13 +208,8 @@ def _generate_word_filename(before_text: str, fallback_base: str, timestamp: str
     """
     date_str = None
     warehouse_str = None
-    # Date: support Chinese year/month/day with optional spaces
-    date_match = re.search(r'(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)
-    if date_match:
-        y, m, d = date_match.groups()
-        date_str = f"{y}年{m}月{d}日"
-    # Warehouse: support patterns like (6庫) or (4-2庫)
-    wh_match = re.search(r'\((\d{1,3}(?:-\d{1,2})?)\s*庫\)', before_text)
+    date_match = re.search(r'(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)\n        y, m, d = date_match.groups()
+    date_match = re.search(r'(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日', before_text)\n    if date_match:\n    wh_match = re.search(r'\((\d{1,3}(?:-\d{1,2})?)\s*庫\)', before_text)
     if wh_match:
         warehouse_str = f"({wh_match.group(1)}庫)"
     if date_str and warehouse_str:
