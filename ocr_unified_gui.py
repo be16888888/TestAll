@@ -84,19 +84,24 @@ class UnifiedOCRApp:
         root.configure(bg=BG_COLOR)
         root.minsize(1200, 720)
 
-        # state
+        # layout: top control bar, middle split pane, bottom log
+        # build shell first to allow log()
+        self.log_area = None
+        self._build_top_bar()
+        self._build_middle()
+        self._build_bottom_log()
+
+        # load api keys after log widget exists
+        try:
+            self._load_all_keys()
+        except Exception as e:
+            messagebox.showerror("啟動失敗", f"WebOcrAPI.json 讀取失敗：{e}")
+
         self.image_path = None
         self.latest_docx_path = None
         self.running = False
         self.api_keys = {}
-
-        # load api keys
         self._load_all_keys()
-
-        # layout: top control bar, middle split pane, bottom log
-        self._build_top_bar()
-        self._build_middle()
-        self._build_bottom_log()
 
     # -------------------
     # Load / Save keys
