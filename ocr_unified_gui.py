@@ -498,12 +498,79 @@ class UnifiedOCRApp:
 
         self.running = False
 
-    def _preview_docx(self, docx_path: str):
-        self.preview_text.config(state='normal')
-        self.preview_text.delete('1.0', 'end')
-        html = docx_to_text_preview(docx_path)
-        self.preview_text.insert('1.0', html)
-        self.preview_text.config(state='disabled')
+    # -------------------
+    # Word actions — LibreOffice Writer
+    # -------------------
+    def _update_word_buttons(self):
+        """Enable/disable buttons based on current image's docx status."""
+        image = self._current_image_path()
+        docx = self.latest_docx_paths.get(image) if image else None
+        has_docx = docx and os.path.exists(docx)
+        if docx:
+            self.word_path_var.set(docx)
+        elif image:
+            self.word_path_var.set("（此圖片尚未產出 Word）")
+        else:
+            self.word_path_var.set("")
+        if has_docx:
+            self.open_word_btn.config(state='normal')
+            self.open_explorer_btn.config(state='normal')
+            self.word_status.config(text="✅ 已就緒", fg='#00ff00')
+        else:
+            self.open_word_btn.config(state='disabled')
+            self.open_explorer_btn.config(state='disabled')
+            if self.running:
+                self.word_status.config(text="⏳ 辨識中...", fg='orange')
+            else:
+                self.word_status.config(text="（尚未產出）", fg='orange')
+
+    def _open_with_libreoffice(self):
+        """Open current docx file with LibreOffice Writer."""
+        image = self._current_image_path()
+        docx = self.latest_docx_paths.get(image) if image else None
+        if not docx or not os.path.exists(docx):
+            messagebox.showerror("錯誤", "找不到 Word 檔案")
+            return
+        try:
+            self.log(f"用 LibreOffice Writer 開啟：{docx}")
+            # libreoffice --writer in foreground mode so the user edits
+            subprocess.Popen(
+                ["soffice", "--writer", docx],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        except Exception as e:
+            self.log(f"LibreOffice 啟動失敗：{e}")
+            messagebox.showerror("錯誤", f"無法啟動 LibreOffice Writer：{e}")
+
+    def _open_in_explorer(self):
+        """Open the output directory in Windows File Explorer."""
+        image = self._current_image_path()
+        docx = self.latest_docx_paths.get(image) if image else None
+        if docx and os.path.exists(docx):
+            parent = os.path.dirname(docx)
+        else:
+            parent = self.out_var.get().strip() or OUTPUT_DIR
+        if not os.path.exists(parent):
+            os.makedirs(parent, exist_ok=True)
+        # Use explorer.exe via WSL interop to open in Windows
+        try:
+            if os.path.exists("/mnt/c/Windows/explorer.exe"):
+                wsl_path = str(Path(parent).resolve())
+                subprocess.Popen(
+                    ["/mnt/c/Windows/explorer.exe", wsl_path],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                self.log(f"已用檔案總管開啟：{parent}")
+            else:
+                # Fallback: use xdg-open (Linux native)
+                subprocess.Popen(
+                    ["xdg-open", parent],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                self.log(f"已用檔案管理器開啟：{parent}")
+        except Exception as e:
+            self.log(f"開啟目錄失敗：{e}")
+            messagebox.showerror("錯誤", f"無法開啟目錄：{e}")
 
     # -------------------
     # Logging
