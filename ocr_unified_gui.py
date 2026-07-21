@@ -527,24 +527,6 @@ class UnifiedOCRApp:
             else:
                 self.word_status.config(text="（尚未產出）", fg='orange')
 
-    def _open_with_libreoffice(self):
-        """Open current docx file with LibreOffice Writer."""
-        image = self._current_image_path()
-        docx = self.latest_docx_paths.get(image) if image else None
-        if not docx or not os.path.exists(docx):
-            messagebox.showerror("錯誤", "找不到 Word 檔案")
-            return
-        try:
-            self.log(f"用 LibreOffice Writer 開啟：{docx}")
-            # libreoffice --writer in foreground mode so the user edits
-            subprocess.Popen(
-                ["soffice", "--writer", docx],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-        except Exception as e:
-            self.log(f"LibreOffice 啟動失敗：{e}")
-            messagebox.showerror("錯誤", f"無法啟動 LibreOffice Writer：{e}")
-
     def _open_in_explorer(self):
         """Open the output directory in Windows File Explorer."""
         image = self._current_image_path()
@@ -574,6 +556,173 @@ class UnifiedOCRApp:
         except Exception as e:
             self.log(f"開啟目錄失敗：{e}")
             messagebox.showerror("錯誤", f"無法開啟目錄：{e}")
+
+    # -------------------
+    # Word table editor — Treeview
+    # -------------------
+    def _load_docx_to_treeview(self, docx_path: str):
+        """Load the first table from a .docx into the Treeview."""
+        try:
+            from docx import Document
+            doc = Document(docx_path)
+            if not doc.tables:
+                self.log("Word 檔案中無表格")
+                return
+            table = doc.tables[0]  # use first table
+
+            # Extract headers
+            headers = [cell.text.strip() for cell in table.rows[0].cells]
+            if not headers:
+                self.log("表格無表頭")
+                return
+
+            # Configure tree columns
+            self.tree['columns'] = headers
+            for h in headers:
+                self.tree.heading(h, text=h, anchor='w')
+                self.tree.column(h, width=120, minwidth=80, stretch=True)
+
+            # Clear existing rows
+            self.tree.delete(*self.tree.get_children())
+
+            # Insert data rows (skip header row 0)
+            for row_idx, row in enumerate(table.rows[1:], start=1):
+                values = [cell.text.strip() for cell in row.cells]
+                # Pad/truncate to match header count
+                if len(values) < len(headers):
+                    values += [''] * (len(headers) - len(values))
+                elif len(values) > len(headers):
+                    values = values[:len(headers)]
+                self.tree.insert('', 'end', iid=f'row_{row_idx}', values=values)
+
+            self._current_docx_path = docx_path
+            self._dirty = False
+            self.log(f"已載入表格：{len(table.rows)-1} 列 × {len(headers)} 欄")
+        except Exception as e:
+            self.log(f"載入 Word 表格失敗：{e}")
+            messagebox.showerror("錯誤", f"無法讀取 Word 表格：{e}")
+
+    def _on_tree_click(self, event):
+        """Close any open editor when clicking elsewhere."""
+        if self._edit_entry:
+            self._finish_edit()
+
+    def _on_cell_double_click(self, event):
+        """Start editing the double-clicked cell."""
+        if self._edit_entry:
+            self._finish_edit()
+
+        region = self.tree.identify('region', event.x, event.y)
+        if region != 'cell':
+            return
+
+        row_id = self.tree.identify_row(event.y)
+        col_id = self.tree.identify_column(event.x)
+        if not row_id or not col_id:
+            return
+
+        col_idx = int(col_id.replace('#', '')) - 1
+        if col_idx < 0 or col_idx >= len(self.tree['columns']):
+            return
+
+        # Get cell bounding box
+        bbox = self.tree.bbox(row_id, col_id)
+        if not bbox:
+            return
+        x, y, w, h = bbox
+
+        # Get current value
+        current_val = self.tree.item(row_id, 'values')[col_idx]
+
+        # Create entry widget on top of cell
+        entry = tk.Entry(
+            self.tree, font=MONO_FONT,
+            bg=ENTRY_BG, fg=FG_COLOR, insertbackground=FG_COLOR,
+            borderwidth=1, relief='solid'
+        )
+        entry.place(x=x, y=y, width=w, height=h)
+        entry.insert(0, current_val)
+        entry.select_range(0, tk.END)
+        entry.focus_set()
+
+        def on_focus_out(e):
+            self._finish_edit()
+
+        def on_return(e):
+            self._finish_edit()
+
+        entry.bind('<FocusOut>', on_focus_out)
+        entry.bind('<Return>', on_return)
+        entry.bind('<Escape>', lambda e: self._cancel_edit())
+
+        self._edit_entry = entry
+        self._edit_row_id = row_id
+        self._edit_col_idx = col_idx
+
+    def _finish_edit(self):
+        """Commit the edited value to Treeview."""
+        if not self._edit_entry:
+            return
+        new_val = self._edit_entry.get()
+        self._edit_entry.destroy()
+        self._edit_entry = None
+
+        if self._edit_row_id and self._edit_col_idx is not None:
+            values = list(self.tree.item(self._edit_row_id, 'values'))
+            if 0 <= self._edit_col_idx < len(values):
+                values[self._edit_col_idx] = new_val
+                self.tree.item(self._edit_row_id, values=values)
+                self._dirty = True
+
+        self._edit_row_id = None
+        self._edit_col_idx = None
+
+    def _cancel_edit(self):
+        """Discard edit."""
+        if self._edit_entry:
+            self._edit_entry.destroy()
+            self._edit_entry = None
+            self._edit_row_id = None
+            self._edit_col_idx = None
+
+    def _save_treeview_to_docx(self):
+        """Write Treeview data back to the original .docx (first table)."""
+        if not self._current_docx_path or not os.path.exists(self._current_docx_path):
+            messagebox.showerror("錯誤", "找不到原始 Word 檔案")
+            return
+        if not self._dirty:
+            messagebox.showinfo("提示", "資料未變更，無需儲存")
+            return
+
+        try:
+            from docx import Document
+            doc = Document(self._current_docx_path)
+            if not doc.tables:
+                messagebox.showerror("錯誤", "Word 檔案中無表格")
+                return
+            table = doc.tables[0]
+
+            headers = list(self.tree['columns'])
+            row_ids = self.tree.get_children()
+
+            # Update each data row (skip header row 0)
+            for i, row_id in enumerate(row_ids):
+                values = self.tree.item(row_id, 'values')
+                word_row_idx = i + 1  # row 0 is header
+                if word_row_idx >= len(table.rows):
+                    break
+                row = table.rows[word_row_idx]
+                for j, val in enumerate(values):
+                    if j < len(row.cells):
+                        row.cells[j].text = str(val)
+
+            doc.save(self._current_docx_path)
+            self._dirty = False
+            self.log(f"已儲存回 Word：{self._current_docx_path}")
+            messagebox.showinfo("完成", "已儲存回 Word 檔")
+        except Exception as e:
+            self.log(f"儲存 Word 失敗：{e}")
+            messagebox.showerror("錯誤", f"儲存失敗：{e}")
 
     # -------------------
     # Logging
