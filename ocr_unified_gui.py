@@ -281,8 +281,14 @@ class UnifiedOCRApp:
                 self.preview_text.delete('1.0', 'end')
                 self.preview_text.config(state='disabled')
 
+    def _current_image_path(self):
+        if self.image_paths and 0 <= self.current_image_idx < len(self.image_paths):
+            return self.image_paths[self.current_image_idx]
+        return None
+
     def _draw_image_preview(self):
-        if not self.image_path:
+        path = self._current_image_path()
+        if not path:
             self.image_canvas.delete("all")
             self.image_canvas.create_text(
                 self.image_canvas.winfo_width() / 2,
