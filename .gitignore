@@ -2,3 +2,12 @@ __pycache__/
 *.pyc
 .venv/
 *.tmp
+# 資料庫與輸出目錄
+data/
+*.db
+*.sqlite
+ocr_results/
+backtest_results/
+backtest_logs/
+logs/
+*.log

@@ -326,16 +326,43 @@ class UnifiedOCRApp:
         self.tree.bind('<Double-1>', self._on_cell_double_click)
         self.tree.bind('<Button-1>', self._on_tree_click)
 
+        # --- 入庫資訊區 (Phase 3) ---
+        db_row = tk.Frame(right, bg=BG_COLOR)
+        db_row.pack(fill='x', pady=(8,0))
+        tk.Label(db_row,text="業務日期:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=0,sticky='w',padx=(0,4))
+        self.biz_date_var = tk.StringVar(value=time.strftime("%Y-%m-%d"))
+        tk.Entry(db_row,textvariable=self.biz_date_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=1,padx=(0,12))
+        tk.Label(db_row,text="庫別:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=2,sticky='w',padx=(0,4))
+        self.lib_var = tk.StringVar(value="inbound")
+        ttk.Combobox(db_row,textvariable=self.lib_var,values=["inbound","outbound","A倉","B倉"],state='readonly',width=10,font=SMALL_FONT).grid(row=0,column=3,padx=(0,12))
+        tk.Label(db_row,text="品項:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=4,sticky='w',padx=(0,4))
+        self.item_name_var = tk.StringVar()
+        tk.Entry(db_row,textvariable=self.item_name_var,width=18,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=5)
+        self.db_status_lbl = tk.Label(db_row,text="",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT)
+        self.db_status_lbl.grid(row=0,column=6,padx=(12,0))
+
         # --- Save button ---
         save_frame = tk.Frame(right, bg=BG_COLOR)
         save_frame.pack(fill='x', pady=(8, 0))
         self.save_word_btn = tk.Button(
-            save_frame, text="💾 儲存回 Word 檔",
-            command=self._save_treeview_to_docx,
+            save_frame, text="💾 回存WORD檔 / 入資料庫",
+            command=self._save_and_archive,
             bg='#cc6600', fg=FG_COLOR, font=DEFAULT_FONT, padx=24, pady=10,
             state='disabled'
         )
         self.save_word_btn.pack(fill='x')
+
+        # Phase 6: 庫存按鈕
+        btn_row = tk.Frame(right, bg=BG_COLOR)
+        btn_row.pack(fill='x', pady=(4,0))
+        tk.Button(btn_row, text="📊 庫存概覽", command=self._show_inventory_panel,
+                  bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=16, pady=6).pack(side='left', padx=4)
+        tk.Button(btn_row, text="📋 品項管理", command=self._show_item_manager,
+                  bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=16, pady=6).pack(side='left', padx=4)
+        tk.Button(btn_row, text="⚙️ 規則管理", command=self._show_rule_manager,
+                  bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=16, pady=6).pack(side='left', padx=4)
+
+        self._db_initialized = False
 
         # Internal state for editing
         self._edit_entry = None
@@ -1039,6 +1066,214 @@ class UnifiedOCRApp:
                 return
 
         self.log(f"驗證未通過（已重試{max_retry}次）")
+
+    # ================================================================
+    # Phase 3+6+7+8: 入庫、庫存面板、品項管理、規則管理
+    # ================================================================
+    def _ensure_db(self):
+        """延遲初始化 DB (Phase 3)"""
+        if getattr(self, '_db_initialized', False):
+            return True
+        try:
+            from core.db.repository import init_db, DB_PATH
+            from core.ocr_review_service import OCRReviewService
+            from core.inventory_service import InventoryService
+            init_db()
+            self._ocr_service = OCRReviewService()
+            self._inv_service = InventoryService(self._ocr_service.repo)
+            self._db_initialized = True
+            self.log("資料庫已初始化")
+            return True
+        except Exception as e:
+            self.log(f"資料庫初始化失敗：{e}")
+            messagebox.showerror("錯誤", f"資料庫初始化失敗：{e}")
+            return False
+
+    def _save_and_archive(self):
+        """Phase 3: 回存 Word + 入資料庫"""
+        self._save_treeview_to_docx()
+        if not self._ensure_db():
+            return
+        from core.db.repository import compute_image_hash
+        item_name = self.item_name_var.get().strip()
+        if not item_name:
+            try:
+                kids = self.tree.get_children()
+                if kids and self.tree['columns']:
+                    vals = self.tree.item(kids[0], 'values')
+                    if vals and vals[0]:
+                        item_name = str(vals[0]).strip()
+            except Exception:
+                pass
+        if not item_name:
+            self.db_status_lbl.config(text="⚠️ 品項為空", fg='orange')
+            return
+        biz = self.biz_date_var.get().strip()
+        lib = self.lib_var.get().strip()
+        wp = self._current_docx_path or ""
+        img_path = self.image_paths[self.current_image_idx] if self.current_image_idx < len(self.image_paths) else ""
+        qty = self._parse_quantity_from_tree()
+        ocr_md = self._tree_to_markdown()
+        img_hash = compute_image_hash(Path(img_path)) if img_path else "no_image"
+        r = self._ocr_service.save_reviewed_item(
+            review_date=biz, library=lib, item_name=item_name,
+            ocr_raw_name=item_name, ocr_text=ocr_md, word_path=wp,
+            quantity=qty, source_image_path=img_path, source_image_hash=img_hash)
+        if r.ok:
+            self.db_status_lbl.config(text=f"✅ 已入庫 ({lib}/{item_name})", fg='#00cc00')
+            self.log(f"入庫成功 {item_name} ({biz}/{lib})")
+            if r.alerts:
+                self._show_alerts(r.alerts)
+        else:
+            self.db_status_lbl.config(text=f"❌ {r.errors[0][:30]}", fg='red')
+            self.log(f"入庫失敗 {r.errors}")
+
+    def _parse_quantity_from_tree(self) -> float:
+        try:
+            hdrs = list(self.tree['columns'])
+            for ci, h in enumerate(hdrs):
+                if any(kw in str(h).lower() for kw in ['數量','qty','weight','重量']):
+                    total = 0.0
+                    for rid in self.tree.get_children():
+                        vs = self.tree.item(rid,'values')
+                        if ci < len(vs):
+                            try: total += float(str(vs[ci]).replace(',',''))
+                            except: pass
+                    return total
+        except: pass
+        return 0.0
+
+    def _tree_to_markdown(self) -> str:
+        lines = []
+        hdrs = list(self.tree['columns'])
+        if hdrs:
+            lines.append("|" + "|".join(str(h) for h in hdrs) + "|")
+            lines.append("|" + "|".join("---" for _ in hdrs) + "|")
+        for rid in self.tree.get_children():
+            V = self.tree.item(rid,'values')
+            lines.append("|" + "|".join(str(v).replace('\n',' ') for v in V) + "|")
+        return "\n".join(lines)
+
+    def _show_alerts(self, alerts):
+        """提醒視窗"""
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f"⚠️ 提醒 ({len(alerts)})")
+        dlg.configure(bg=BG_COLOR); dlg.geometry("600x400")
+        cvs = tk.Canvas(dlg,bg=BG_COLOR,highlightthickness=0)
+        sb = ttk.Scrollbar(dlg,orient='vertical',command=cvs.yview)
+        fr = tk.Frame(cvs,bg=BG_COLOR)
+        fr.bind("<Configure>",lambda e:cvs.configure(scrollregion=cvs.bbox("all")))
+        cvs.create_window((0,0),window=fr,anchor='nw'); cvs.configure(yscrollcommand=sb.set)
+        cl = {'info':'#4488ff','warning':'#ffaa00','critical':'#ff4444'}
+        for a in alerts:
+            c = cl.get(a.severity,'#ffaa00')
+            tk.Label(fr,text=f"[{a.severity.upper()}] {a.rule_name}",fg=c,bg=BG_COLOR,
+                     font=('微軟正黑體',12,'bold')).pack(anchor='w',padx=10,pady=(8,0))
+            tk.Label(fr,text=a.message,fg=FG_COLOR,bg=BG_COLOR,
+                     font=('微軟正黑體',11),wraplength=550,justify='left').pack(anchor='w',padx=10,pady=2)
+        cvs.pack(side='left',fill='both',expand=True)
+        sb.pack(side='right',fill='y')
+        tk.Button(dlg,text="✓ 已知悉",command=dlg.destroy,bg=BTN_BG,fg=FG_COLOR,font=DEFAULT_FONT).pack(pady=10)
+
+    # --- Phase 6: 庫存概覽面板 ---
+    def _show_inventory_panel(self):
+        if not self._ensure_db(): return
+        biz = self.biz_date_var.get().strip()
+        lib = self.lib_var.get().strip()
+        try:
+            diffs = self._inv_service.calculate_daily(biz, lib)
+        except Exception as e:
+            self.log(f"庫存計算失敗：{e}")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title(f"庫存概览 {biz}/{lib}"); win.geometry("720x540"); win.configure(bg=BG_COLOR)
+        abnormal = [d for d in diffs.values() if d.is_abnormal]
+        normal = [d for d in diffs.values() if not d.is_abnormal]
+        lbl = tk.Label(win,text=f"共 {len(diffs)} 品項（🔴異常 {len(abnormal)} / 🔵正常 {len(normal)}）",
+                       fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
+        cvs = tk.Canvas(win,bg=BG_COLOR,highlightthickness=0)
+        sb = ttk.Scrollbar(win,orient='vertical',command=cvs.yview)
+        box = tk.Frame(cvs,bg=BG_COLOR)
+        box.bind("<Configure>",lambda e:cvs.configure(scrollregion=cvs.bbox("all")))
+        cvs.create_window((0,0),window=box,anchor='nw'); cvs.configure(yscrollcommand=sb.set)
+        hdr = tk.Frame(box,bg=BG_COLOR)
+        for i,txt in enumerate(["品項","理論","實際","損耗量","損耗率"]):
+            tk.Label(hdr,text=txt,fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=10).grid(row=0,column=i,padx=2)
+        hdr.pack(anchor='w',padx=8,pady=4)
+        for color,grp in [('#ff4444',abnormal),('#4488ff',normal)]:
+            for d in grp:
+                rw = tk.Frame(box,bg=BG_COLOR)
+                for j,val in enumerate([d.item_name,f"{d.expected_qty:.1f}",f"{d.actual_qty:.1f}",f"{d.loss_qty:+.2f}",f"{d.loss_pct:.1f}%"]):
+                    tk.Label(rw,text=val,fg=color,bg=BG_COLOR,font=SMALL_FONT,width=10).grid(row=0,column=j,padx=2)
+                rw.pack(anchor='w',padx=8)
+        cvs.pack(side='left',fill='both',expand=True,padx=8,pady=8)
+        sb.pack(side='right',fill='y')
+        tk.Button(win,text="關閉",command=win.destroy,bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT).pack(pady=6)
+
+    # --- Phase 7: 品項管理 ---
+    def _show_item_manager(self):
+        if not self._ensure_db(): return
+        win = tk.Toplevel(self.root); win.title("品項管理"); win.geometry("540x480"); win.configure(bg=BG_COLOR)
+        tk.Label(win,text="所有品項 (canonical_items)",fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
+        cvs = tk.Canvas(win,bg=BG_COLOR,highlightthickness=0)
+        sb = ttk.Scrollbar(win,orient='vertical',command=cvs.yview)
+        box = tk.Frame(cvs,bg=BG_COLOR)
+        box.bind("<Configure>",lambda e:cvs.configure(scrollregion=cvs.bbox("all")))
+        cvs.create_window((0,0),window=box,anchor='nw'); cvs.configure(yscrollcommand=sb.set)
+        items = self._ocr_service.repo.get_all_canonical_items(active_only=False)
+        for ci in items:
+            f = tk.Frame(box,bg=BG_COLOR)
+            tk.Label(f,text=ci.canonical_name,fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16).pack(side='left',padx=4)
+            status = "✓" if ci.is_active else "✗"
+            tk.Label(f,text=status,fg='#00cc00' if ci.is_active else '#ff4444',bg=BG_COLOR,font=SMALL_FONT).pack(side='left',padx=4)
+            tk.Label(f,text=f"{ci.category or ''}",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT).pack(side='left',padx=4)
+            tk.Button(f,text="屬性",command=lambda n=ci.canonical_name:self._show_item_attrs(n),
+                      bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT).pack(side='right',padx=4)
+            f.pack(anchor='w',padx=8,pady=2)
+        cvs.pack(side='left',fill='both',expand=True,padx=8,pady=8)
+        sb.pack(side='right',fill='y')
+        tk.Button(win,text="關閉",command=win.destroy,bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT).pack(pady=6)
+
+    def _show_item_attrs(self, name):
+        """Phase 8: 單品項屬性編輯"""
+        win = tk.Toplevel(self.root); win.title(f"{name} 的屬性"); win.geometry("540x360"); win.configure(bg=BG_COLOR)
+        tk.Label(win,text=f"品项: {name}",fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
+        attrs = self._ocr_service.get_item_attributes(name)
+        entries = {}
+        for key in ['shelf_life_days','normal_loss_pct','expiry_date','unit']:
+            f = tk.Frame(win,bg=BG_COLOR); f.pack(fill='x',padx=14,pady=2)
+            tk.Label(f,text=f"{key}:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16).pack(side='left')
+            val = tk.StringVar(value=attrs.get(key,''))
+            tk.Entry(f,textvariable=val,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT,width=20).pack(side='left')
+            entries[key] = val
+        def save():
+            for k,v in entries.items():
+                if v.get().strip():
+                    self._ocr_service.set_item_attribute(name,k,v.get().strip())
+            win.destroy()
+            self.log(f"已更新 {name} 屬性")
+        tk.Button(win,text="儲存",command=save,bg='#cc6600',fg=FG_COLOR,font=DEFAULT_FONT).pack(pady=10)
+
+    # --- Phase 8: 規則管理 ---
+    def _show_rule_manager(self):
+        win = tk.Toplevel(self.root); win.title("規則管理"); win.geometry("640x480"); win.configure(bg=BG_COLOR)
+        tk.Label(win,text="自訂提醒規則",fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
+        rules = self._ocr_service.repo.get_enabled_alert_rules() if self._ensure_db() else []
+        cvs = tk.Canvas(win,bg=BG_COLOR,highlightthickness=0)
+        sb = ttk.Scrollbar(win,orient='vertical',command=cvs.yview)
+        box = tk.Frame(cvs,bg=BG_COLOR)
+        box.bind("<Configure>",lambda e:cvs.configure(scrollregion=cvs.bbox("all")))
+        cvs.create_window((0,0),window=box,anchor='nw'); cvs.configure(yscrollcommand=sb.set)
+        if not rules:
+            tk.Label(box,text="(尚無自訂規則)",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT).pack(pady=10)
+        for R in rules:
+            f = tk.Frame(box,bg=BG_COLOR); f.pack(fill='x',padx=8,pady=2)
+            tk.Label(f,text=f"{R.rule_name} ({R.rule_type})",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=30).pack(side='left')
+            tk.Label(f,text=R.severity,fg='#ffaa00',bg=BG_COLOR,font=SMALL_FONT).pack(side='left',padx=4)
+        cvs.pack(side='left',fill='both',expand=True,padx=8,pady=8)
+        sb.pack(side='right',fill='y')
+        tk.Button(win,text="關閉",command=win.destroy,bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT).pack(pady=6)
 
     # -------------------
     # Logging
