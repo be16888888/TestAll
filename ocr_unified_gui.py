@@ -45,50 +45,6 @@ OUTPUT_DIR = r"/mnt/e/DiskCUse/HFDownloads"
 # ---------------------------
 # Helpers
 # ---------------------------
-def docx_to_text_preview(docx_path: str) -> str:
-    """Extract plain text from .docx for preview in Tkinter Text widget.
-    Preserves table structure with aligned columns."""
-    try:
-        from docx import Document
-        doc = Document(docx_path)
-        lines = []
-        for p in doc.paragraphs:
-            text = p.text.strip()
-            if text:
-                lines.append(text)
-        for table in doc.tables:
-            lines.append("")  # blank before table
-            # collect rows
-            rows_data = []
-            for row in table.rows:
-                cells = [cell.text.strip() for cell in row.cells]
-                rows_data.append(cells)
-            if not rows_data:
-                continue
-            # calc column widths
-            max_cols = max(len(r) for r in rows_data)
-            col_widths = [0] * max_cols
-            for r in rows_data:
-                for ci, cell in enumerate(r):
-                    col_widths[ci] = max(col_widths[ci], len(cell))
-            # render
-            for ri, row in enumerate(rows_data):
-                padded = []
-                for ci in range(max_cols):
-                    cell = row[ci] if ci < len(row) else ""
-                    padded.append(cell.ljust(col_widths[ci]))
-                line = " | ".join(padded)
-                lines.append(line)
-                if ri == 0:
-                    # separator after header
-                    sep = "-+-".join("-" * w for w in col_widths)
-                    lines.append(sep)
-            lines.append("")  # blank after table
-        return "\n".join(lines)
-    except Exception as e:
-        return f"預覽失敗：{e}"
-
-
 def time_str() -> str:
     return time.strftime("%H:%M:%S")
 
