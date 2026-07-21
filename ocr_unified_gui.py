@@ -374,7 +374,8 @@ class UnifiedOCRApp:
         if self.running:
             messagebox.showinfo("提示", "正在處理中，請稍候。")
             return
-        if not self.image_path or not os.path.exists(self.image_path):
+        path = self._current_image_path()
+        if not path or not os.path.exists(path):
             messagebox.showerror("錯誤", "請先選擇有效的圖片檔案")
             return
 
