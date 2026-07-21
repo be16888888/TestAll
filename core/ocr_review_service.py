@@ -283,33 +283,21 @@ class OCRReviewService:
             except (ValueError, TypeError):
                 pass
 
-        # ---- Step 6: 內建規則檢查 ----
+        # ---- Step 6: 內建規則檢查 (輕量防禦 — 不寫入 alert_history，由 RuleEngine 統一管理) ----
         alerts: list[Alert] = []
 
-        # 6a. 跨庫檢測
+        # 6a. 跨庫檢測（快速回報用；RuleEngine 會做正式檢查並寫入 alert_history）
         cross_lib_alerts = self._check_cross_library(item_name, library)
         alerts.extend(cross_lib_alerts)
 
-        # 6b. 效期檢查
+        # 6b. 效期檢查（快速回報用；正式邏輯見 RuleEngine.scan_expiry_alerts）
         if existing_expiry:
             expiry_alerts = self._check_expiry(item_name, existing_expiry)
             alerts.extend(expiry_alerts)
 
-        # ---- Step 7: 記錄 alert_history ----
-        for alert in alerts:
-            self.repo.insert_alert_history(AlertHistory(
-                history_id=None,
-                rule_id=alert.rule_id,
-                alert_type=alert.alert_type or "rule",
-                triggered_at=now,
-                severity=alert.severity,
-                message=alert.message,
-                context=json.dumps(alert.context, ensure_ascii=False),
-                dismissed=0,
-                dismissed_at=None,
-                dismissed_by=None,
-                created_at="",
-            ))
+        # ---- Step 7: 記錄 alert_history（由 RuleEngine 統一管理；此處保留輕量回報） ----
+        # Note: 正式 alert_history 寫入已移至 RuleEngine.evaluate_on_save，
+        #       此處的 alerts 僅供 UI 立即顯示，不持久化。
 
         result.alerts = alerts
         result.success = True

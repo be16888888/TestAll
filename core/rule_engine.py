@@ -192,9 +192,9 @@ class RuleEngine:
     # 使用者自訂規則
     # ----------------------------------------------------------
 
-    def _run_user_rule(self, rule, item: ReviewedItem) -> list[Alert]:
+    def _run_user_rule(self, rule: AlertRule, item: ReviewedItem) -> list[Alert]:
         """根據 rule_type 分發至對應處理器"""
-        rule_type = rule["rule_type"]
+        rule_type = rule.rule_type
 
         handlers: dict[str, Callable] = {
             "query": self._handle_query_rule,
@@ -209,9 +209,9 @@ class RuleEngine:
             return []
         return handler(rule, item)
 
-    def _handle_query_rule(self, rule: dict, item: ReviewedItem) -> list[Alert]:
+    def _handle_query_rule(self, rule: AlertRule, item: ReviewedItem) -> list[Alert]:
         """執行自訂 SQL 查詢規則：若回傳任何列 → 觸發"""
-        check_sql = rule.get("check_sql", "")
+        check_sql = rule.check_sql or ""
         if not check_sql:
             return []
 
@@ -219,28 +219,28 @@ class RuleEngine:
             rows = self.repo.execute(check_sql)
             if rows:
                 return [Alert(
-                    rule_name=rule["rule_name"],
-                    severity=rule.get("severity", "warning"),
+                    rule_name=rule.rule_name,
+                    severity=rule.severity or "warning",
                     alert_type="user_query",
-                    rule_id=rule["rule_id"],
-                    message=f"查詢規則觸發：{rule['rule_name']}（{len(rows)} 筆）",
-                    context={"rule_id": rule["rule_id"], "rows": len(rows)},
+                    rule_id=rule.rule_id,
+                    message=f"查詢規則觸發：{rule.rule_name}（{len(rows)} 筆）",
+                    context={"rule_id": rule.rule_id, "rows": len(rows)},
                 )]
         except Exception:
             # 若查詢失敗（如 SQL 語法錯誤），不中斷
             pass
         return []
 
-    def _handle_threshold_rule(self, rule: dict, item: ReviewedItem) -> list[Alert]:
-        """閾值規則：監測欄位值 vs 閾值"""
-        field = rule.get("threshold_field", "")
-        op = rule.get("threshold_operator", "gt")
-        threshold = rule.get("threshold_value", "0")
+    def _handle_threshold_rule(self, rule: AlertRule, item: ReviewedItem) -> list[Alert]:
+        """閾值規則：檢查欄位值 vs 閾值"""
+        field = rule.threshold_field or ""
+        op = rule.threshold_operator or "gt"
+        threshold = rule.threshold_value or "0"
 
         if not field:
             return []
 
-        # 從 item 或 item_attributes 取得當前值
+        # 從 item 或 item_attributes 取得目前值
         actual = getattr(item, field, None)
         if actual is None:
             actual = self.repo.get_item_attr(item.item_name, field)
@@ -269,21 +269,28 @@ class RuleEngine:
 
         if triggered:
             return [Alert(
-                rule_name=rule["rule_name"],
-                severity=rule.get("severity", "warning"),
+                rule_name=rule.rule_name,
+                severity=rule.severity or "warning",
                 alert_type="threshold",
-                rule_id=rule["rule_id"],
+                rule_id=rule.rule_id,
                 message=f"「{item.item_name}」{field}={actual_val} {op} {threshold}",
-                context={"rule_id": rule["rule_id"], "field": field, "value": actual_val},
+                context={"rule_id": rule.rule_id, "field": field, "value": actual_val},
             )]
         return []
 
-    def _handle_cross_reference_rule(self, rule: dict, item: ReviewedItem) -> list[Alert]:
-        """跨表檢查規則：類似內建跨庫，但可自訂 tables 和 conditions"""
-        tables = rule.get("cross_tables", "")
-        condition = rule.get("cross_condition", "")
+    def _handle_cross_reference_rule(self, rule: AlertRule, item: ReviewedItem) -> list[Alert]:
+        """交叉檢查規則：檢查品項是否出現在其他自訂表中"""
+        tables = rule.cross_tables or ""
+        condition = rule.cross_condition or ""
 
         if not tables or not condition:
+            return []
+
+        # 驗證 tables 與 condition 僅含合法的 SQL 識別符號/運算子
+        import re
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_ ,]*$', tables):
+            return []
+        if not re.match(r'^[a-zA-Z_. =<>!?0-9\'%"()\s,]*$', condition):
             return []
 
         try:
@@ -292,22 +299,22 @@ class RuleEngine:
             count = dict(rows[0]).get("COUNT(*)", 0) if rows else 0
             if count > 0:
                 return [Alert(
-                    rule_name=rule["rule_name"],
-                    severity=rule.get("severity", "warning"),
+                    rule_name=rule.rule_name,
+                    severity=rule.severity or "warning",
                     alert_type="cross_ref",
-                    rule_id=rule["rule_id"],
-                    message=f"跨表關聯觸發：{rule['rule_name']}（{count} 筆）",
-                    context={"rule_id": rule["rule_id"], "count": count},
+                    rule_id=rule.rule_id,
+                    message=f"交叉關聯觸發：{rule.rule_name}（{count} 筆）",
+                    context={"rule_id": rule.rule_id, "count": count},
                 )]
         except Exception:
             pass
         return []
 
-    def _handle_date_proximity_rule(self, rule: dict, item: ReviewedItem) -> list[Alert]:
-        """日期鄰近規則：檢查品項的 expiry_date 或特殊日期"""
-        date_field = rule.get("date_field", "expiry_date")
-        days_before = rule.get("days_before", 2)
-        check_stock = rule.get("check_if_has_stock", 1)
+    def _handle_date_proximity_rule(self, rule: AlertRule, item: ReviewedItem) -> list[Alert]:
+        """日期鄰近規則：檢查品項的 expiry_date 或其他日期"""
+        date_field = rule.date_field or "expiry_date"
+        days_before = rule.days_before or 2
+        check_stock = rule.check_if_has_stock
 
         expiry_str = self.repo.get_item_attr(item.item_name, date_field)
         if not expiry_str:
@@ -325,34 +332,34 @@ class RuleEngine:
                 if stock <= 0:
                     return []
 
-            sev = "critical" if days_left <= 0 else rule.get("severity", "warning")
+            sev = "critical" if days_left <= 0 else (rule.severity or "warning")
             return [Alert(
-                rule_name=rule["rule_name"],
+                rule_name=rule.rule_name,
                 severity=sev,
                 alert_type="date_proximity",
-                rule_id=rule["rule_id"],
+                rule_id=rule.rule_id,
                 message=f"⏰「{item.item_name}」{days_left} 天後到期（{expiry}），庫存 {stock if check_stock else '?'}",
-                context={"rule_id": rule["rule_id"], "days_left": days_left, "date": expiry_str},
+                context={"rule_id": rule.rule_id, "days_left": days_left, "date": expiry_str},
             )]
         return []
 
-    def _handle_inventory_diff_rule(self, rule: dict, item: ReviewedItem) -> list[Alert]:
-        """庫存差異規則：可自訂 normal_loss_pct 閾值"""
-        pct = rule.get("normal_loss_pct")
+    def _handle_inventory_diff_rule(self, rule: AlertRule, item: ReviewedItem) -> list[Alert]:
+        """庫存差異規則：可自訂 damage_loss_pct 閾值"""
+        pct = rule.normal_loss_pct
         if pct is None:
             return []
 
         diffs = self.inventory_service.calculate_daily(item.review_date, item.library)
         alerts = []
         for name, diff in diffs.items():
-            if diff.loss_pct > float(pct):
+            if diff.loss_pct > pct:
                 alerts.append(Alert(
-                    rule_name=rule["rule_name"],
-                    severity=rule.get("severity", "critical"),
+                    rule_name=rule.rule_name,
+                    severity=rule.severity or "critical",
                     alert_type="inventory_diff",
-                    rule_id=rule["rule_id"],
+                    rule_id=rule.rule_id,
                     message=f"🔴「{name}」自訂損耗上限 {pct}% 觸發：實際 {diff.loss_pct:.1f}%",
-                    context={"rule_id": rule["rule_id"], "loss_pct": diff.loss_pct, "threshold": pct},
+                    context={"rule_id": rule.rule_id, "loss_pct": diff.loss_pct, "threshold": pct},
                 ))
         return alerts
 

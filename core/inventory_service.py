@@ -46,8 +46,7 @@ class InventoryService:
         for name in items:
             prev = self.repo.get_prev_daily_inventory(review_date, library, name)
             opening = prev.closing_qty if prev else 0.0
-            inflow = self._qty(review_date, library, name)
-            outflow = self._qty(review_date, library, name) if library != "inbound" else 0.0
+            # inflow/outflow 由下方邏輯決定（依 library 型別）
             # simplification: inflow only for inbound lib, outflow only for outbound
             if library == "inbound":
                 inflow = self._sum_ocr_qty(review_date, library, name)
@@ -168,15 +167,17 @@ class InventoryService:
         inv = self.repo.get_daily_inventory(review_date, library, item_name)
         return inv.actual_qty if inv else None
 
-    def _qty(self, review_date, library, item_name): ...
-    def _prev_date(self, d): return (date.fromisoformat(d) - timedelta(days=1)).isoformat() if d else d
+    def _prev_date(self, d: str) -> str:
+        return (date.fromisoformat(d) - timedelta(days=1)).isoformat() if d else d
 
 
-def get_inventory_service(repo=None): return InventoryService(repo)
+def get_inventory_service(repo=None):
+    return InventoryService(repo)
 
 
 # ============================================================
 # Self-test
+# ============================================================
 if __name__ == "__main__":
     import sys, tempfile, hashlib
     from pathlib import Path

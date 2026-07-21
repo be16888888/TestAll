@@ -27,9 +27,11 @@ from image_utils import convert_to_jpeg
 
 
 # ---------------------------
-# Hash tracking constants
+# Path constants
 # ---------------------------
-HASH_DB_PATH = "image_hashes.json"
+_PROJECT_DIR = Path(__file__).resolve().parent
+_API_KEY_FILE = str(_PROJECT_DIR / "WebOcrAPI.json")
+__HASH_DB_PATH = str(_PROJECT_DIR / "image_hashes.json")
 # ---------------------------
 FG_COLOR = 'white'
 BG_COLOR = 'black'
@@ -92,7 +94,7 @@ class UnifiedOCRApp:
     # -------------------
     def _load_all_keys(self):
         try:
-            with open("WebOcrAPI.json", "r", encoding="utf-8") as f:
+            with open(_API_KEY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
             messagebox.showerror("啟動失敗", f"WebOcrAPI.json 讀取失敗：{e}")
@@ -110,7 +112,7 @@ class UnifiedOCRApp:
             messagebox.showwarning("提示", "API Key 不可為空，不會更新。")
             return False
         try:
-            with open("WebOcrAPI.json", "r", encoding="utf-8") as f:
+            with open(_API_KEY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception as e:
             messagebox.showerror("錯誤", f"讀取 WebOcrAPI.json 失敗：{e}")
@@ -128,7 +130,7 @@ class UnifiedOCRApp:
             data.append({"ModelName": model_name, "api_key": new_key.strip()})
 
         try:
-            with open("WebOcrAPI.json", "w", encoding="utf-8") as f:
+            with open(_API_KEY_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             messagebox.showerror("錯誤", f"寫入 WebOcrAPI.json 失敗：{e}")
@@ -143,7 +145,7 @@ class UnifiedOCRApp:
     def _load_hash_db(self):
         """載入 image_hashes.json，建立 hash -> path 映射"""
         try:
-            with open(HASH_DB_PATH, "r", encoding="utf-8") as f:
+            with open(_HASH_DB_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             # data: [{"hash": "...", "path": "..."}, ...]
             self.image_hashes = {item["hash"]: item["path"] for item in data if isinstance(item, dict)}
@@ -159,7 +161,7 @@ class UnifiedOCRApp:
         """將 image_hashes 寫入 image_hashes.json"""
         try:
             data = [{"hash": h, "path": p} for h, p in self.image_hashes.items()]
-            with open(HASH_DB_PATH, "w", encoding="utf-8") as f:
+            with open(_HASH_DB_PATH, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as e:
             self.log(f"雜湊資料庫寫入失敗：{e}")

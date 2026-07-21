@@ -892,8 +892,8 @@ def compute_image_hash(image_path: Path) -> str:
     return h.hexdigest()
 
 
+# 取得 repository 實例（每次呼叫回傳新實例，開銷極低 — SQLite 連線在每次 with get_conn 內即開即關）
 def get_repo(db_path: Path = DB_PATH) -> SQLiteReviewRepository:
-    """取得 repository 單例（應用層可快取）"""
     return SQLiteReviewRepository(db_path)
 
 
