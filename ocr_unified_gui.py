@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 統一 OCR.Space / Nanonets / LlamaIndex GUI
-- 左側原圖 / 右側 Word 預覽
+- 左側原圖 / 右側按鈕啟動 LibreOffice Writer 開啟 Word 檔（可編輯+存檔+修改格式）
 - 依序嘗試 LlamaIndex -> Nanonets -> OCR.Space，一個失敗自動切下一個
 - 支援修改 API Key 並寫回 WebOcrAPI.json
 - 黑底白字、預設字體 20
