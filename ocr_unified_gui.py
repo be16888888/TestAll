@@ -105,8 +105,10 @@ class UnifiedOCRApp:
         root.minsize(1200, 720)
 
         # state first
-        self.image_path = None
+        self.image_paths = []        # list of paths, multi-select
+        self.current_image_idx = 0   # which image is shown
         self.latest_docx_path = None
+        self.latest_docx_paths = {}  # image_path -> docx_path map
         self.running = False
         self.api_keys = {}
 
