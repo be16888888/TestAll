@@ -17,15 +17,19 @@ import webbrowser
 import subprocess
 import threading
 import time
+import hashlib
 from pathlib import Path
 
 from ocrspace_core import process_single as ocrspace_process, load_api_key as ocrspace_load_key
 from nanonets_core import process_single as nanonets_process, load_api_key as nanonets_load_key
 from llamaindex_core import process_image as llamaindex_process, load_api_key as llamaindex_load_key, get_base_url as llamaindex_get_base_url
+from image_utils import convert_to_jpeg
 
 
 # ---------------------------
-# Style & constants
+# Hash tracking constants
+# ---------------------------
+HASH_DB_PATH = "image_hashes.json"
 # ---------------------------
 FG_COLOR = 'white'
 BG_COLOR = 'black'
@@ -68,6 +72,9 @@ class UnifiedOCRApp:
         self.latest_docx_paths = {}  # image_path -> docx_path map
         self.running = False
         self.api_keys = {}
+        # hash tracking
+        self.image_hashes = {}       # hash -> original_path
+        self._load_hash_db()
 
         # UI
         self._build_top_bar()
@@ -129,6 +136,42 @@ class UnifiedOCRApp:
 
         self.api_keys[model_name] = new_key.strip()
         return True
+
+    # -------------------
+    # Hash tracking
+    # -------------------
+    def _load_hash_db(self):
+        """載入 image_hashes.json，建立 hash -> path 映射"""
+        try:
+            with open(HASH_DB_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # data: [{"hash": "...", "path": "..."}, ...]
+            self.image_hashes = {item["hash"]: item["path"] for item in data if isinstance(item, dict)}
+            self.log(f"已載入雜湊資料庫：{len(self.image_hashes)} 筆")
+        except FileNotFoundError:
+            self.image_hashes = {}
+            self.log("雜湊資料庫不存在，將建立新檔")
+        except Exception as e:
+            self.image_hashes = {}
+            self.log(f"雜湊資料庫讀取失敗：{e}")
+
+    def _save_hash_db(self):
+        """將 image_hashes 寫入 image_hashes.json"""
+        try:
+            data = [{"hash": h, "path": p} for h, p in self.image_hashes.items()]
+            with open(HASH_DB_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            self.log(f"雜湊資料庫寫入失敗：{e}")
+
+    @staticmethod
+    def _calc_file_hash(path: str) -> str:
+        """計算檔案 SHA256 雜湊"""
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest()
 
     # -------------------
     # UI build
@@ -322,18 +365,39 @@ class UnifiedOCRApp:
             filetypes=[("Image files", "*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP *.tiff *.TIFF *.webp *.WEBP")],
             initialdir=r"/mnt/e/DiskCUse/HFDownloads/OCRUse02"
         )
-        if paths:
-            self.image_paths = list(paths)
-            self.current_image_idx = 0
-            self.latest_docx_paths = {}
-            # update dropdown
-            names = [os.path.basename(p) for p in self.image_paths]
-            self.file_combo['values'] = names
-            self.file_var.set(names[0])
-            self.log(f"已選擇 {len(paths)} 個檔案：{', '.join(names)}")
-            self.latest_docx_path = None
-            self._update_word_buttons()
-            self._draw_image_preview()
+        if not paths:
+            return
+
+        new_paths = []
+        dup_count = 0
+        for p in paths:
+            file_hash = self._calc_file_hash(p)
+            if file_hash in self.image_hashes:
+                dup_count += 1
+                self.log(f"跳過重複檔案（已存在雜湊）：{os.path.basename(p)}")
+                continue
+            # 記錄雜湊
+            self.image_hashes[file_hash] = p
+            new_paths.append(p)
+
+        if dup_count:
+            self.log(f"已略過 {dup_count} 個重複檔案")
+            self._save_hash_db()
+
+        if not new_paths:
+            self.log("所有選擇檔案皆為重複，未新增")
+            return
+
+        self.image_paths = list(new_paths)
+        self.current_image_idx = 0
+        self.latest_docx_paths = {}
+        names = [os.path.basename(p) for p in self.image_paths]
+        self.file_combo['values'] = names
+        self.file_var.set(names[0])
+        self.log(f"已選擇 {len(new_paths)} 個新檔案：{', '.join(names)}")
+        self.latest_docx_path = None
+        self._update_word_buttons()
+        self._draw_image_preview()
 
     def _on_file_selected(self, event=None):
         idx = self.file_combo.current()
@@ -593,6 +657,15 @@ class UnifiedOCRApp:
         """處理單張圖片，返回 docx 路徑或 None"""
         errors = []
         last_docx = None
+        jpeg_to_clean = None
+
+        # 統一轉 JPEG（JPG/JPEG 直接跳過）
+        original_path = image_path
+        converted = convert_to_jpeg(image_path)
+        if converted != image_path:
+            jpeg_to_clean = converted
+            self.log(f"格式轉換：{os.path.basename(image_path)} → {os.path.basename(converted)}")
+        image_path = converted
 
         # 1) LlamaIndex
         try:
@@ -652,8 +725,16 @@ class UnifiedOCRApp:
                 errors.append(f"OCR.Space 失敗：{msg}")
                 self.log(f"[核心] OCR.Space 失敗：{msg}")
 
+        # 清理暫存 JPEG
+        if jpeg_to_clean and os.path.exists(jpeg_to_clean):
+            try:
+                os.remove(jpeg_to_clean)
+            except OSError:
+                pass
+
+        # 回報結果（使用原始路徑）
         if last_docx and os.path.exists(last_docx):
-            self.latest_docx_paths[image_path] = last_docx
+            self.latest_docx_paths[original_path] = last_docx
             self.root.after(0, lambda p=last_docx: self.log(f"完成：{p}"))
             return last_docx
         elif errors:
