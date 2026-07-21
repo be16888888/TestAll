@@ -37,6 +37,7 @@ DEFAULT_FONT = ('Arial', 20)
 TITLE_FONT = ('Arial', 20, 'bold')
 NORMAL_FONT = ('Arial', 14)
 SMALL_FONT = ('Arial', 12)
+WORD_FILENAME_FONT = ('Arial', 12)  # Word 檔名字體 12
 MONO_FONT = ('Consolas', 16)
 
 OUTPUT_DIR = r"/mnt/e/DiskCUse/HFDownloads"
@@ -196,7 +197,7 @@ class UnifiedOCRApp:
         path_bar.pack(fill='x', pady=(0, 4))
         tk.Label(
             path_bar, textvariable=self.word_path_var,
-            fg='#aaaaaa', bg=BG_COLOR, font=('Consolas', 11), anchor='w'
+            fg='#aaaaaa', bg=BG_COLOR, font=WORD_FILENAME_FONT, anchor='w'
         ).pack(side='left', fill='x', expand=True)
 
         # --- Treeview table ---
@@ -246,15 +247,6 @@ class UnifiedOCRApp:
             state='disabled'
         )
         self.save_word_btn.pack(fill='x')
-
-        # --- Open in Explorer button (keep for convenience) ---
-        self.open_explorer_btn = tk.Button(
-            save_frame, text="📁 用檔案總管開啟所在目錄",
-            command=self._open_in_explorer,
-            bg='#336633', fg=FG_COLOR, font=DEFAULT_FONT, padx=24, pady=10,
-            state='disabled'
-        )
-        self.open_explorer_btn.pack(fill='x', pady=(6, 0))
 
         # Internal state for editing
         self._edit_entry = None
@@ -397,9 +389,8 @@ class UnifiedOCRApp:
         if self.running:
             messagebox.showinfo("提示", "正在處理中，請稍候。")
             return
-        path = self._current_image_path()
-        if not path or not os.path.exists(path):
-            messagebox.showerror("錯誤", "請先選擇有效的圖片檔案")
+        if not self.image_paths:
+            messagebox.showerror("錯誤", "請先選擇圖片檔案")
             return
 
         out_dir = self.out_var.get().strip()
@@ -408,18 +399,52 @@ class UnifiedOCRApp:
         os.makedirs(out_dir, exist_ok=True)
 
         self.running = True
-        image_path = self._current_image_path()
-        self.log(f"開始依序嘗試 [{os.path.basename(image_path)}]：LlamaIndex -> Nanonets -> OCR.Space")
-        threading.Thread(target=self._process_worker, args=(out_dir, image_path,), daemon=True).start()
+        self._batch_results = {}
+        # disable start button during batch
+        for btn in self._get_all_buttons():
+            if btn.winfo_exists():
+                btn.config(state='disabled')
+        self.log(f"開始批次辨識 {len(self.image_paths)} 張圖片...")
+        threading.Thread(target=self._batch_process_worker, args=(out_dir,), daemon=True).start()
 
-    def _process_worker(self, out_dir: str, image_path: str):
+    def _get_all_buttons(self):
+        """返回所有需要在批次處理期間禁用的按鈕"""
+        btns = []
+        # top bar buttons
+        for child in self.root.winfo_children():
+            btns.extend(self._collect_buttons(child))
+        return btns
+
+    def _collect_buttons(self, widget):
+        btns = []
+        if isinstance(widget, tk.Button):
+            btns.append(widget)
+        elif hasattr(widget, 'winfo_children'):
+            for child in widget.winfo_children():
+                btns.extend(self._collect_buttons(child))
+        return btns
+
+    def _batch_process_worker(self, out_dir: str):
+        """批次處理所有選中的圖片"""
+        total = len(self.image_paths)
+        for idx, image_path in enumerate(self.image_paths, 1):
+            if not self.running:  # 允許中途停止
+                break
+            self.root.after(0, lambda i=idx, p=image_path: self.log(f"[{i}/{total}] 開始辨識：{os.path.basename(p)}"))
+            docx_path = self._process_single_image(out_dir, image_path)
+            if docx_path:
+                self._batch_results[image_path] = docx_path
+        # 完成
+        self.root.after(0, lambda: self._on_batch_complete(total))
+
+    def _process_single_image(self, out_dir: str, image_path: str):
+        """處理單張圖片，返回 docx 路徑或 None"""
         errors = []
-        engine_results = {}
         last_docx = None
 
         # 1) LlamaIndex
         try:
-            self.log("[核心] LlamaIndex 開始辨識 ...")
+            self.log(f"[核心] LlamaIndex 開始辨識：{os.path.basename(image_path)} ...")
             res = llamaindex_process(
                 api_key=self.api_keys.get("llamaindex", ""),
                 image_path=image_path,
@@ -429,7 +454,6 @@ class UnifiedOCRApp:
                 save_html=False,
                 save_md=False,
             )
-            engine_results["llamaindex"] = res
             last_docx = res.get("word")
             self.log(f"[核心] LlamaIndex 完成：{res}")
         except Exception as e:
@@ -440,7 +464,7 @@ class UnifiedOCRApp:
         # 2) Nanonets
         if not last_docx:
             try:
-                self.log("[核心] Nanonets 開始辨識 ...")
+                self.log(f"[核心] Nanonets 開始辨識：{os.path.basename(image_path)} ...")
                 res = nanonets_process(
                     api_key=self.api_keys.get("nanonets", ""),
                     image_path=image_path,
@@ -449,7 +473,6 @@ class UnifiedOCRApp:
                     save_excel=False,
                     save_md=False,
                 )
-                engine_results["nanonets"] = res
                 last_docx = res.get("word")
                 self.log(f"[核心] Nanonets 完成：{res}")
             except Exception as e:
@@ -460,7 +483,7 @@ class UnifiedOCRApp:
         # 3) OCR.Space
         if not last_docx:
             try:
-                self.log("[核心] OCR.Space 開始辨識 ...")
+                self.log(f"[核心] OCR.Space 開始辨識：{os.path.basename(image_path)} ...")
                 res = ocrspace_process(
                     api_key=self.api_keys.get("ocr.space", ""),
                     image_path=image_path,
@@ -470,7 +493,6 @@ class UnifiedOCRApp:
                     save_text=False,
                     save_md=False,
                 )
-                engine_results["ocrspace"] = res
                 last_docx = res.get("word")
                 self.log(f"[核心] OCR.Space 完成：{res}")
             except Exception as e:
@@ -479,19 +501,37 @@ class UnifiedOCRApp:
                 self.log(f"[核心] OCR.Space 失敗：{msg}")
 
         if last_docx and os.path.exists(last_docx):
-            self.latest_docx_path = last_docx
             self.latest_docx_paths[image_path] = last_docx
-            self.root.after(0, lambda: self._update_word_buttons())
-            self.root.after(0, lambda: messagebox.showinfo("完成", f"辨識完成\nWord：{last_docx}"))
-            self.log(f"完成：{last_docx}")
+            self.root.after(0, lambda p=last_docx: self.log(f"完成：{p}"))
+            return last_docx
         elif errors:
-            self.root.after(0, lambda: messagebox.showerror("全部失敗", "\n".join(errors)))
-            self.log("全部引擎皆失敗。")
+            self.root.after(0, lambda e=errors: self.log(f"全部引擎失敗：{'; '.join(e)}"))
+            return None
         else:
-            self.root.after(0, lambda: messagebox.showwarning("未完成", "已處理，但未產出 Word。"))
-            self.log("已處理，但未產出 Word。")
+            self.root.after(0, lambda: self.log("已處理，但未產出 Word"))
+            return None
 
+    def _on_batch_complete(self, total: int):
+        """批次完成後的回調"""
+        success_count = len(self._batch_results)
         self.running = False
+        # re-enable buttons
+        for btn in self._get_all_buttons():
+            if btn.winfo_exists():
+                btn.config(state='normal')
+        if success_count > 0:
+            messagebox.showinfo("完成", f"批次辨識完成\n成功：{success_count}/{total}")
+            # 更新下拉選單並顯示第一個結果
+            self.file_var.set(os.path.basename(self.image_paths[0]))
+            self.current_image_idx = 0
+            self._update_word_buttons()
+            self._draw_image_preview()
+        else:
+            messagebox.showwarning("未完成", "所有圖片皆未產出 Word")
+
+    def _process_worker(self, out_dir: str, image_path: str):
+        """保留舊方法以防相容，不再使用"""
+        pass
 
     # -------------------
     # Word actions — LibreOffice Writer
@@ -502,21 +542,20 @@ class UnifiedOCRApp:
         docx = self.latest_docx_paths.get(image) if image else None
         has_docx = docx and os.path.exists(docx)
         if docx:
-            self.word_path_var.set(docx)
+            # 只顯示檔名，字體 12
+            self.word_path_var.set(os.path.basename(docx))
         elif image:
             self.word_path_var.set("（此圖片尚未產出 Word）")
         else:
             self.word_path_var.set("")
         if has_docx:
             self.save_word_btn.config(state='normal')
-            self.open_explorer_btn.config(state='normal')
             self.word_status.config(text="✅ 已就緒", fg='#00ff00')
             # Load table into Treeview if not already loaded for this docx
             if self._current_docx_path != docx:
                 self._load_docx_to_treeview(docx)
         else:
             self.save_word_btn.config(state='disabled')
-            self.open_explorer_btn.config(state='disabled')
             # Clear tree
             self.tree.delete(*self.tree.get_children())
             self.tree['columns'] = []
@@ -526,36 +565,6 @@ class UnifiedOCRApp:
                 self.word_status.config(text="⏳ 辨識中...", fg='orange')
             else:
                 self.word_status.config(text="（尚未產出）", fg='orange')
-
-    def _open_in_explorer(self):
-        """Open the output directory in Windows File Explorer."""
-        image = self._current_image_path()
-        docx = self.latest_docx_paths.get(image) if image else None
-        if docx and os.path.exists(docx):
-            parent = os.path.dirname(docx)
-        else:
-            parent = self.out_var.get().strip() or OUTPUT_DIR
-        if not os.path.exists(parent):
-            os.makedirs(parent, exist_ok=True)
-        # Use explorer.exe via WSL interop to open in Windows
-        try:
-            if os.path.exists("/mnt/c/Windows/explorer.exe"):
-                wsl_path = str(Path(parent).resolve())
-                subprocess.Popen(
-                    ["/mnt/c/Windows/explorer.exe", wsl_path],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
-                self.log(f"已用檔案總管開啟：{parent}")
-            else:
-                # Fallback: use xdg-open (Linux native)
-                subprocess.Popen(
-                    ["xdg-open", parent],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
-                self.log(f"已用檔案管理器開啟：{parent}")
-        except Exception as e:
-            self.log(f"開啟目錄失敗：{e}")
-            messagebox.showerror("錯誤", f"無法開啟目錄：{e}")
 
     # -------------------
     # Word table editor — Treeview
@@ -687,6 +696,9 @@ class UnifiedOCRApp:
 
     def _save_treeview_to_docx(self):
         """Write Treeview data back to the original .docx (first table)."""
+        # Ensure any pending cell edit is committed before saving
+        if self._edit_entry:
+            self._finish_edit()
         if not self._current_docx_path or not os.path.exists(self._current_docx_path):
             messagebox.showerror("錯誤", "找不到原始 Word 檔案")
             return
