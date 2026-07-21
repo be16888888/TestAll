@@ -298,7 +298,7 @@ class UnifiedOCRApp:
             return
         try:
             from PIL import Image, ImageTk
-            img = Image.open(self.image_path)
+            img = Image.open(path)
             # fit to canvas
             cw = max(self.image_canvas.winfo_width(), 400)
             ch = max(self.image_canvas.winfo_height(), 300)
