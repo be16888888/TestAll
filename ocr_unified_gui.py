@@ -223,14 +223,51 @@ class UnifiedOCRApp:
         self.preview_photo = None
         mid.add(left, minsize=400)
 
-        # right: preview + save controls
+        # right: Word 開啟區
         right = tk.Frame(mid, bg=BG_COLOR)
-        tk.Label(right, text="Word 預覽", fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(anchor='w')
-        self.preview_text = scrolledtext.ScrolledText(
-            right, wrap='word', bg=LOG_BG, fg=LOG_FG,
-            font=MONO_FONT, state='disabled'
+        top_right = tk.Frame(right, bg=BG_COLOR)
+        top_right.pack(fill='x', padx=0, pady=0)
+        tk.Label(top_right, text="Word 文件", fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(side='left')
+        self.word_status = tk.Label(
+            top_right, text="（尚未產出）", fg='orange', bg=BG_COLOR, font=SMALL_FONT
         )
-        self.preview_text.pack(fill='both', expand=True)
+        self.word_status.pack(side='left', padx=12)
+
+        self.word_path_var = tk.StringVar(value="")
+        # info bar
+        info_bar = tk.Frame(right, bg=BG_COLOR)
+        info_bar.pack(fill='x', pady=(8, 4))
+        self.word_path_label = tk.Label(
+            info_bar, textvariable=self.word_path_var,
+            fg='#aaaaaa', bg=BG_COLOR, font=('Consolas', 11), anchor='w'
+        )
+        self.word_path_label.pack(side='left', fill='x', expand=True)
+
+        # buttons
+        btn_frame = tk.Frame(right, bg=BG_COLOR)
+        btn_frame.pack(fill='x', pady=4)
+        self.open_word_btn = tk.Button(
+            btn_frame, text="📄 用 LibreOffice Writer 開啟 Word",
+            command=self._open_with_libreoffice,
+            bg='#0066cc', fg=FG_COLOR, font=DEFAULT_FONT, padx=20, pady=16,
+            state='disabled'
+        )
+        self.open_word_btn.pack(fill='x', padx=0, pady=6)
+
+        self.open_explorer_btn = tk.Button(
+            btn_frame, text="📁 用檔案總管開啟所在目錄",
+            command=self._open_in_explorer,
+            bg='#336633', fg=FG_COLOR, font=DEFAULT_FONT, padx=20, pady=16,
+            state='disabled'
+        )
+        self.open_explorer_btn.pack(fill='x', padx=0, pady=6)
+
+        # hint text
+        self.hint_label = tk.Label(
+            right, text="辨識完成後，點擊按鈕用 LibreOffice Writer 開啟 Word 檔\n可直接修改內容、表格、格式 → 按 Ctrl+S 存檔",
+            fg='#888888', bg=BG_COLOR, font=SMALL_FONT, justify='left'
+        )
+        self.hint_label.pack(fill='x', pady=20)
         mid.add(right, minsize=500)
 
     def _build_bottom_log(self):
