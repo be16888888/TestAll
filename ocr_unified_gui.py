@@ -179,51 +179,90 @@ class UnifiedOCRApp:
         self.preview_photo = None
         mid.add(left, minsize=400)
 
-        # right: Word 開啟區
+        # right: Word 表格編輯區
         right = tk.Frame(mid, bg=BG_COLOR)
-        top_right = tk.Frame(right, bg=BG_COLOR)
-        top_right.pack(fill='x', padx=0, pady=0)
-        tk.Label(top_right, text="Word 文件", fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(side='left')
+        # --- Toolbar ---
+        toolbar = tk.Frame(right, bg=BG_COLOR)
+        toolbar.pack(fill='x', padx=0, pady=(0, 4))
+        tk.Label(toolbar, text="Word 表格編輯", fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(side='left')
         self.word_status = tk.Label(
-            top_right, text="（尚未產出）", fg='orange', bg=BG_COLOR, font=SMALL_FONT
+            toolbar, text="（尚未產出）", fg='orange', bg=BG_COLOR, font=SMALL_FONT
         )
         self.word_status.pack(side='left', padx=12)
 
+        # file path display
         self.word_path_var = tk.StringVar(value="")
-        # info bar
-        info_bar = tk.Frame(right, bg=BG_COLOR)
-        info_bar.pack(fill='x', pady=(8, 4))
-        self.word_path_label = tk.Label(
-            info_bar, textvariable=self.word_path_var,
+        path_bar = tk.Frame(right, bg=BG_COLOR)
+        path_bar.pack(fill='x', pady=(0, 4))
+        tk.Label(
+            path_bar, textvariable=self.word_path_var,
             fg='#aaaaaa', bg=BG_COLOR, font=('Consolas', 11), anchor='w'
-        )
-        self.word_path_label.pack(side='left', fill='x', expand=True)
+        ).pack(side='left', fill='x', expand=True)
 
-        # buttons
-        btn_frame = tk.Frame(right, bg=BG_COLOR)
-        btn_frame.pack(fill='x', pady=4)
-        self.open_word_btn = tk.Button(
-            btn_frame, text="📄 用 LibreOffice Writer 開啟 Word",
-            command=self._open_with_libreoffice,
-            bg='#0066cc', fg=FG_COLOR, font=DEFAULT_FONT, padx=20, pady=16,
+        # --- Treeview table ---
+        table_frame = tk.Frame(right, bg=BG_COLOR)
+        table_frame.pack(fill='both', expand=True)
+
+        # Vertical scrollbar
+        vsb = ttk.Scrollbar(table_frame, orient='vertical')
+        vsb.pack(side='right', fill='y')
+        # Horizontal scrollbar
+        hsb = ttk.Scrollbar(table_frame, orient='horizontal')
+        hsb.pack(side='bottom', fill='x')
+
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=[],
+            show='headings',
+            yscrollcommand=vsb.set,
+            xscrollcommand=hsb.set,
+            selectmode='browse'
+        )
+        self.tree.pack(side='left', fill='both', expand=True)
+        vsb.config(command=self.tree.yview)
+        hsb.config(command=self.tree.xview)
+
+        # Style for dark theme
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure("Treeview",
+            background=LOG_BG, fieldbackground=LOG_BG, foreground=LOG_FG,
+            font=MONO_FONT, rowheight=28, borderwidth=0)
+        style.configure("Treeview.Heading",
+            background=BTN_BG, foreground=FG_COLOR, font=SMALL_FONT, borderwidth=1)
+        style.map("Treeview", background=[('selected', '#004488')])
+
+        # Bind double-click for cell editing
+        self.tree.bind('<Double-1>', self._on_cell_double_click)
+        self.tree.bind('<Button-1>', self._on_tree_click)
+
+        # --- Save button ---
+        save_frame = tk.Frame(right, bg=BG_COLOR)
+        save_frame.pack(fill='x', pady=(8, 0))
+        self.save_word_btn = tk.Button(
+            save_frame, text="💾 儲存回 Word 檔",
+            command=self._save_treeview_to_docx,
+            bg='#cc6600', fg=FG_COLOR, font=DEFAULT_FONT, padx=24, pady=10,
             state='disabled'
         )
-        self.open_word_btn.pack(fill='x', padx=0, pady=6)
+        self.save_word_btn.pack(fill='x')
 
+        # --- Open in Explorer button (keep for convenience) ---
         self.open_explorer_btn = tk.Button(
-            btn_frame, text="📁 用檔案總管開啟所在目錄",
+            save_frame, text="📁 用檔案總管開啟所在目錄",
             command=self._open_in_explorer,
-            bg='#336633', fg=FG_COLOR, font=DEFAULT_FONT, padx=20, pady=16,
+            bg='#336633', fg=FG_COLOR, font=DEFAULT_FONT, padx=24, pady=10,
             state='disabled'
         )
-        self.open_explorer_btn.pack(fill='x', padx=0, pady=6)
+        self.open_explorer_btn.pack(fill='x', pady=(6, 0))
 
-        # hint text
-        self.hint_label = tk.Label(
-            right, text="辨識完成後，點擊按鈕用 LibreOffice Writer 開啟 Word 檔\n可直接修改內容、表格、格式 → 按 Ctrl+S 存檔",
-            fg='#888888', bg=BG_COLOR, font=SMALL_FONT, justify='left'
-        )
-        self.hint_label.pack(fill='x', pady=20)
+        # Internal state for editing
+        self._edit_entry = None
+        self._edit_row_id = None
+        self._edit_col_idx = None
+        self._current_docx_path = None
+        self._dirty = False
+
         mid.add(right, minsize=500)
 
     def _build_bottom_log(self):
