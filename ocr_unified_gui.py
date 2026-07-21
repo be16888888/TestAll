@@ -181,12 +181,19 @@ class UnifiedOCRApp:
         bar.pack(side='top', fill='x', padx=20, pady=10)
 
         tk.Button(
-            bar, text="選擇圖片（仅一張）", command=self.select_file,
+            bar, text="選擇圖片（可多選）", command=self.select_files,
             bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=20, pady=8
         ).pack(side='left', padx=10)
 
-        self.file_label = tk.Label(bar, text="尚未選擇圖片", fg='gray', bg=BG_COLOR, font=SMALL_FONT)
-        self.file_label.pack(side='left', padx=10)
+        # file list dropdown
+        tk.Label(bar, text="圖片：", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT).pack(side='left', padx=(10, 2))
+        self.file_var = tk.StringVar(value="尚未選擇")
+        self.file_combo = ttk.Combobox(
+            bar, textvariable=self.file_var, values=["尚未選擇"],
+            state='readonly', width=35, font=SMALL_FONT
+        )
+        self.file_combo.pack(side='left', padx=2)
+        self.file_combo.bind('<<ComboboxSelected>>', self._on_file_selected)
 
         tk.Button(
             bar, text="開始辨識", command=self.start_process,
