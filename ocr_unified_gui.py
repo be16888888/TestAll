@@ -497,7 +497,7 @@ class UnifiedOCRApp:
     # Word actions — LibreOffice Writer
     # -------------------
     def _update_word_buttons(self):
-        """Enable/disable buttons based on current image's docx status."""
+        """Enable/disable buttons and load table based on current image's docx status."""
         image = self._current_image_path()
         docx = self.latest_docx_paths.get(image) if image else None
         has_docx = docx and os.path.exists(docx)
@@ -508,12 +508,20 @@ class UnifiedOCRApp:
         else:
             self.word_path_var.set("")
         if has_docx:
-            self.open_word_btn.config(state='normal')
+            self.save_word_btn.config(state='normal')
             self.open_explorer_btn.config(state='normal')
             self.word_status.config(text="✅ 已就緒", fg='#00ff00')
+            # Load table into Treeview if not already loaded for this docx
+            if self._current_docx_path != docx:
+                self._load_docx_to_treeview(docx)
         else:
-            self.open_word_btn.config(state='disabled')
+            self.save_word_btn.config(state='disabled')
             self.open_explorer_btn.config(state='disabled')
+            # Clear tree
+            self.tree.delete(*self.tree.get_children())
+            self.tree['columns'] = []
+            self._current_docx_path = None
+            self._dirty = False
             if self.running:
                 self.word_status.config(text="⏳ 辨識中...", fg='orange')
             else:
