@@ -38,7 +38,7 @@ NORMAL_FONT = ('Arial', 14)
 SMALL_FONT = ('Arial', 12)
 MONO_FONT = ('Consolas', 16)
 
-OUTPUT_DIR = r"E:\DiskCUse\HFDownloads"
+OUTPUT_DIR = r"/mnt/e/DiskCUse/HFDownloads"
 
 
 # ---------------------------
