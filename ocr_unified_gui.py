@@ -45,29 +45,48 @@ OUTPUT_DIR = r"/mnt/e/DiskCUse/HFDownloads"
 # ---------------------------
 # Helpers
 # ---------------------------
-def docx_to_html_preview(docx_path: str) -> str:
-    """Convert a simple .docx to HTML for preview in a Tkinter text widget."""
+def docx_to_text_preview(docx_path: str) -> str:
+    """Extract plain text from .docx for preview in Tkinter Text widget.
+    Preserves table structure with aligned columns."""
     try:
         from docx import Document
         doc = Document(docx_path)
-        html = ["<html><body style='background:#000;color:#fff;font-family:Arial;'>"]
+        lines = []
         for p in doc.paragraphs:
             text = p.text.strip()
             if text:
-                html.append(f"<p>{text}</p>")
+                lines.append(text)
         for table in doc.tables:
-            html.append("<table border='1' cellpadding='6' style='border-collapse:collapse;color:#fff;'>")
-            for ri, row in enumerate(table.rows):
-                tag = 'th' if ri == 0 else 'td'
-                html.append("<tr>")
-                for cell in row.cells:
-                    html.append(f"<{tag}>{cell.text}</{tag}>")
-                html.append("</tr>")
-            html.append("</table>")
-        html.append("</body></html>")
-        return "\n".join(html)
+            lines.append("")  # blank before table
+            # collect rows
+            rows_data = []
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells]
+                rows_data.append(cells)
+            if not rows_data:
+                continue
+            # calc column widths
+            max_cols = max(len(r) for r in rows_data)
+            col_widths = [0] * max_cols
+            for r in rows_data:
+                for ci, cell in enumerate(r):
+                    col_widths[ci] = max(col_widths[ci], len(cell))
+            # render
+            for ri, row in enumerate(rows_data):
+                padded = []
+                for ci in range(max_cols):
+                    cell = row[ci] if ci < len(row) else ""
+                    padded.append(cell.ljust(col_widths[ci]))
+                line = " | ".join(padded)
+                lines.append(line)
+                if ri == 0:
+                    # separator after header
+                    sep = "-+-".join("-" * w for w in col_widths)
+                    lines.append(sep)
+            lines.append("")  # blank after table
+        return "\n".join(lines)
     except Exception as e:
-        return f"<p>預覽失敗：{e}</p>"
+        return f"預覽失敗：{e}"
 
 
 def time_str() -> str:
@@ -417,7 +436,7 @@ class UnifiedOCRApp:
     def _preview_docx(self, docx_path: str):
         self.preview_text.config(state='normal')
         self.preview_text.delete('1.0', 'end')
-        html = docx_to_html_preview(docx_path)
+        html = docx_to_text_preview(docx_path)
         self.preview_text.insert('1.0', html)
         self.preview_text.config(state='disabled')
 
