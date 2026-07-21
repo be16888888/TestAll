@@ -20,11 +20,12 @@ import io
 import html
 
 
-def load_api_key(json_path: str = "WebOcrAPI.json") -> str:
+def load_api_key(json_path: str = None) -> str:
     """Load OCR.Space API key from WebOcrAPI.json.
 
     Args:
         json_path: Path to the JSON configuration file.
+                   Defaults to <script_dir>/WebOcrAPI.json.
 
     Returns:
         The API key string.
@@ -33,6 +34,8 @@ def load_api_key(json_path: str = "WebOcrAPI.json") -> str:
         FileNotFoundError: If the config file is missing.
         ValueError: If the API key is missing or malformed.
     """
+    if json_path is None:
+        json_path = str(Path(__file__).resolve().parent / "WebOcrAPI.json")
     if not os.path.exists(json_path):
         raise FileNotFoundError(f"Configuration file not found: {json_path}")
 

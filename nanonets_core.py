@@ -19,11 +19,12 @@ from docx import Document
 from docx.shared import Cm
 
 
-def load_api_key(json_path: str = "WebOcrAPI.json") -> str:
+def load_api_key(json_path: str = None) -> str:
     """Load Nanonets API key from WebOcrAPI.json.
 
     Args:
         json_path: Path to the JSON configuration file.
+                   Defaults to <script></script>_dir>/WebOcrAPI.json.
 
     Returns:
         The API key string.
@@ -32,6 +33,8 @@ def load_api_key(json_path: str = "WebOcrAPI.json") -> str:
         FileNotFoundError: If the config file is missing.
         ValueError: If the API key is missing or malformed.
     """
+    if json_path is None:
+        json_path = str(Path(__file__).resolve().parent / "WebOcrAPI.json")
     if not os.path.exists(json_path):
         raise FileNotFoundError(f"Configuration file not found: {json_path}")
 
