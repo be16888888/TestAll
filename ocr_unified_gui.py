@@ -246,21 +246,40 @@ class UnifiedOCRApp:
     # -------------------
     # Image preview
     # -------------------
-    def select_file(self):
-        path = filedialog.askopenfilename(
-            title="選擇圖片檔案",
+    def select_files(self):
+        paths = filedialog.askopenfilenames(
+            title="選擇圖片檔案（可多選）",
             filetypes=[("Image files", "*.png *.PNG *.jpg *.JPG *.jpeg *.JPEG *.bmp *.BMP *.tiff *.TIFF *.webp *.WEBP")],
             initialdir=r"/mnt/e/DiskCUse/HFDownloads/OCRUse02"
         )
-        if path:
-            self.image_path = path
-            self.file_label.config(text=os.path.basename(path), fg='white')
-            self.log(f"已選擇：{path}")
+        if paths:
+            self.image_paths = list(paths)
+            self.current_image_idx = 0
+            self.latest_docx_paths = {}
+            # update dropdown
+            names = [os.path.basename(p) for p in self.image_paths]
+            self.file_combo['values'] = names
+            self.file_var.set(names[0])
+            self.log(f"已選擇 {len(paths)} 個檔案：{', '.join(names)}")
             self.latest_docx_path = None
             self.preview_text.config(state='normal')
             self.preview_text.delete('1.0', 'end')
             self.preview_text.config(state='disabled')
             self._draw_image_preview()
+
+    def _on_file_selected(self, event=None):
+        idx = self.file_combo.current()
+        if idx >= 0 and idx < len(self.image_paths):
+            self.current_image_idx = idx
+            self._draw_image_preview()
+            # if we have a docx for this image, show it
+            docx = self.latest_docx_paths.get(self.image_paths[idx])
+            if docx and os.path.exists(docx):
+                self._preview_docx(docx)
+            else:
+                self.preview_text.config(state='normal')
+                self.preview_text.delete('1.0', 'end')
+                self.preview_text.config(state='disabled')
 
     def _draw_image_preview(self):
         if not self.image_path:
