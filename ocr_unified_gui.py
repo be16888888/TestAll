@@ -307,14 +307,7 @@ class UnifiedOCRApp:
         if idx >= 0 and idx < len(self.image_paths):
             self.current_image_idx = idx
             self._draw_image_preview()
-            # if we have a docx for this image, show it
-            docx = self.latest_docx_paths.get(self.image_paths[idx])
-            if docx and os.path.exists(docx):
-                self._preview_docx(docx)
-            else:
-                self.preview_text.config(state='normal')
-                self.preview_text.delete('1.0', 'end')
-                self.preview_text.config(state='disabled')
+            self._update_word_buttons()
 
     def _current_image_path(self):
         if self.image_paths and 0 <= self.current_image_idx < len(self.image_paths):
