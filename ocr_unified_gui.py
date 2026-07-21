@@ -457,6 +457,7 @@ class UnifiedOCRApp:
 
         if last_docx and os.path.exists(last_docx):
             self.latest_docx_path = last_docx
+            self.latest_docx_paths[image_path] = last_docx
             self.root.after(0, lambda: self._preview_docx(last_docx))
             self.root.after(0, lambda: messagebox.showinfo("完成", f"辨識完成\nWord：{last_docx}"))
             self.log(f"完成：{last_docx}")
