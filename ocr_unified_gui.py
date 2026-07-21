@@ -385,10 +385,11 @@ class UnifiedOCRApp:
         os.makedirs(out_dir, exist_ok=True)
 
         self.running = True
-        self.log("開始依序嘗試：LlamaIndex -> Nanonets -> OCR.Space")
-        threading.Thread(target=self._process_worker, args=(out_dir,), daemon=True).start()
+        image_path = self._current_image_path()
+        self.log(f"開始依序嘗試 [{os.path.basename(image_path)}]：LlamaIndex -> Nanonets -> OCR.Space")
+        threading.Thread(target=self._process_worker, args=(out_dir, image_path,), daemon=True).start()
 
-    def _process_worker(self, out_dir: str):
+    def _process_worker(self, out_dir: str, image_path: str):
         errors = []
         engine_results = {}
         last_docx = None
@@ -398,7 +399,7 @@ class UnifiedOCRApp:
             self.log("[核心] LlamaIndex 開始辨識 ...")
             res = llamaindex_process(
                 api_key=self.api_keys.get("llamaindex", ""),
-                image_path=self.image_path,
+                image_path=image_path,
                 output_dir=out_dir,
                 save_word=True,
                 save_excel=False,
@@ -419,7 +420,7 @@ class UnifiedOCRApp:
                 self.log("[核心] Nanonets 開始辨識 ...")
                 res = nanonets_process(
                     api_key=self.api_keys.get("nanonets", ""),
-                    image_path=self.image_path,
+                    image_path=image_path,
                     output_dir=out_dir,
                     save_word=True,
                     save_excel=False,
@@ -439,7 +440,7 @@ class UnifiedOCRApp:
                 self.log("[核心] OCR.Space 開始辨識 ...")
                 res = ocrspace_process(
                     api_key=self.api_keys.get("ocr.space", ""),
-                    image_path=self.image_path,
+                    image_path=image_path,
                     output_dir=out_dir,
                     save_word=True,
                     save_excel=False,
