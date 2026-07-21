@@ -37,7 +37,7 @@ DEFAULT_FONT = ('Arial', 20)
 TITLE_FONT = ('Arial', 20, 'bold')
 NORMAL_FONT = ('Arial', 14)
 SMALL_FONT = ('Arial', 12)
-WORD_FILENAME_FONT = ('Arial', 12)  # Word 檔名字體 12
+WORD_FILENAME_FONT = ('Arial', 16)  # Word 檔名字體 16（只顯示檔名）
 MONO_FONT = ('Consolas', 16)
 
 OUTPUT_DIR = r"/mnt/e/DiskCUse/HFDownloads"
@@ -173,11 +173,44 @@ class UnifiedOCRApp:
 
         # left: image
         left = tk.Frame(mid, bg=BG_COLOR)
-        tk.Label(left, text="原圖", fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(anchor='w')
+
+        # 圖片工具列：放大 / 縮小 / 重置
+        img_toolbar = tk.Frame(left, bg=BG_COLOR)
+        img_toolbar.pack(fill='x', padx=0, pady=(0, 2))
+        tk.Label(img_toolbar, text='原圖', fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(side='left')
+        tk.Button(
+            img_toolbar, text='🔍 放大', command=self._zoom_in,
+            bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=12, pady=4
+        ).pack(side='left', padx=(12, 4))
+        tk.Button(
+            img_toolbar, text='🔍 縮小', command=self._zoom_out,
+            bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=12, pady=4
+        ).pack(side='left', padx=4)
+        tk.Button(
+            img_toolbar, text='↺ 重置', command=self._zoom_reset,
+            bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=12, pady=4
+        ).pack(side='left', padx=4)
+        self.zoom_label = tk.Label(
+            img_toolbar, text='100%', fg='#aaaaaa', bg=BG_COLOR, font=SMALL_FONT
+        )
+        self.zoom_label.pack(side='left', padx=8)
+
         self.image_canvas = tk.Canvas(left, bg='#111111', highlightthickness=1, highlightbackground='#555555')
         self.image_canvas.pack(fill='both', expand=True)
-        self.image_canvas.bind("<Configure>", lambda e: self._draw_image_preview())
+        self.image_canvas.bind('<Configure>', lambda e: self._draw_image_preview())
         self.preview_photo = None
+        self._zoom_scale = 1.0
+        self._img_offset_x = 0
+        self._img_offset_y = 0
+        self._drag_start_x = None
+        self._drag_start_y = None
+        self.image_canvas.bind('<ButtonPress-1>', self._on_img_drag_start)
+        self.image_canvas.bind('<B1-Motion>', self._on_img_drag_move)
+        self.image_canvas.bind('<ButtonRelease-1>', self._on_img_drag_end)
+        # 滾輪縮放
+        self.image_canvas.bind('<MouseWheel>', self._on_mousewheel)   # Windows
+        self.image_canvas.bind('<Button-4>', self._on_mousewheel)     # Linux scroll up
+        self.image_canvas.bind('<Button-5>', self._on_mousewheel)     # Linux scroll down
         mid.add(left, minsize=400)
 
         # right: Word 表格編輯區
@@ -222,6 +255,19 @@ class UnifiedOCRApp:
         self.tree.pack(side='left', fill='both', expand=True)
         vsb.config(command=self.tree.yview)
         hsb.config(command=self.tree.xview)
+
+        # 表格下方文字區域
+        self.after_table_frame = tk.Frame(right, bg=BG_COLOR)
+        self.after_table_label = tk.Label(
+            self.after_table_frame, text="表格下方文字：", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT
+        )
+        self.after_table_label.pack(anchor='w', pady=(6, 2))
+        self.after_table_text = scrolledtext.ScrolledText(
+            self.after_table_frame, height=4, bg=LOG_BG, fg=LOG_FG,
+            font=SMALL_FONT, state='disabled', wrap='word'
+        )
+        self.after_table_text.pack(fill='x')
+        self.after_table_frame.pack(fill='x', pady=(4, 0))
 
         # Style for dark theme
         style = ttk.Style()
@@ -308,29 +354,112 @@ class UnifiedOCRApp:
             self.image_canvas.create_text(
                 self.image_canvas.winfo_width() / 2,
                 self.image_canvas.winfo_height() / 2,
-                text="尚未選擇圖片", fill='#888888', font=SMALL_FONT
+                text='尚未選擇圖片', fill='#888888', font=SMALL_FONT
             )
+            self.zoom_label.config(text='100%')
             return
         try:
             from PIL import Image, ImageTk
-            img = Image.open(path)
-            # fit to canvas
+            self._raw_image = Image.open(path)
+            self._fit_to_canvas()
+        except Exception as e:
+            self.log(f'圖片預覽失敗：{e}')
+
+    def _render_zoomed_image(self):
+        if not hasattr(self, '_raw_image') or self._raw_image is None:
+            return
+        try:
+            from PIL import Image, ImageTk
+            img = self._raw_image
+            scale = self._zoom_scale
+            new_w = int(img.width * scale)
+            new_h = int(img.height * scale)
+            if new_w < 10 or new_h < 10:
+                return
+            img_resized = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            self.preview_photo = ImageTk.PhotoImage(img_resized)
+            self.image_canvas.delete("all")
+            self.image_canvas.create_image(
+                self._img_offset_x, self._img_offset_y,
+                image=self.preview_photo, anchor='nw'
+            )
+            self.zoom_label.config(text=f'{int(scale*100)}%')
+        except Exception as e:
+            self.log(f'圖片渲染失敗：{e}')
+
+    def _zoom_in(self):
+        self._zoom_scale = min(self._zoom_scale * 1.25, 10.0)
+        self._render_zoomed_image()
+
+    def _zoom_out(self):
+        self._zoom_scale = max(self._zoom_scale / 1.25, 0.1)
+        self._render_zoomed_image()
+
+    def _zoom_reset(self):
+        self._zoom_scale = 1.0
+        self._img_offset_x = 0
+        self._img_offset_y = 0
+        self._fit_to_canvas()
+
+    def _fit_to_canvas(self):
+        if not hasattr(self, '_raw_image') or self._raw_image is None:
+            return
+        try:
             cw = max(self.image_canvas.winfo_width(), 400)
             ch = max(self.image_canvas.winfo_height(), 300)
+            img = self._raw_image
             img_ratio = img.width / img.height
             canvas_ratio = cw / ch
             if img_ratio > canvas_ratio:
-                new_w = cw
-                new_h = int(cw / img_ratio)
+                fit_w = cw
+                fit_h = int(cw / img_ratio)
             else:
-                new_h = ch
-                new_w = int(ch * img_ratio)
-            img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-            self.preview_photo = ImageTk.PhotoImage(img)
-            self.image_canvas.delete("all")
-            self.image_canvas.create_image(cw // 2, ch // 2, image=self.preview_photo, anchor='center')
+                fit_h = ch
+                fit_w = int(ch * img_ratio)
+            self._zoom_scale = fit_w / img.width
+            self._img_offset_x = 0
+            self._img_offset_y = 0
+            self._render_zoomed_image()
         except Exception as e:
-            self.log(f"圖片預覽失敗：{e}")
+            self.log(f'自適應失敗：{e}')
+
+    def _on_img_drag_start(self, event):
+        self._drag_start_x = event.x
+        self._drag_start_y = event.y
+
+    def _on_img_drag_move(self, event):
+        if self._drag_start_x is None:
+            return
+        dx = event.x - self._drag_start_x
+        dy = event.y - self._drag_start_y
+        self._img_offset_x += dx
+        self._img_offset_y += dy
+        self._drag_start_x = event.x
+        self._drag_start_y = event.y
+        self._render_zoomed_image()
+
+    def _on_img_drag_end(self, event):
+        self._drag_start_x = None
+        self._drag_start_y = None
+
+    def _on_mousewheel(self, event):
+        """滾輪縮放：Windows (event.delta) / Linux (event.num)"""
+        if not hasattr(self, '_raw_image') or self._raw_image is None:
+            return
+        # Windows: event.delta 正=向上, 負=向下
+        # Linux: event.num 4=向上, 5=向下
+        if hasattr(event, 'delta') and event.delta:
+            direction = 1 if event.delta > 0 else -1
+        elif hasattr(event, 'num') and event.num in (4, 5):
+            direction = 1 if event.num == 4 else -1
+        else:
+            return
+        factor = 1.15
+        if direction > 0:
+            self._zoom_scale = min(self._zoom_scale * factor, 10.0)
+        else:
+            self._zoom_scale = max(self._zoom_scale / factor, 0.1)
+        self._render_zoomed_image()
 
     # -------------------
     # Output dir
@@ -425,17 +554,40 @@ class UnifiedOCRApp:
         return btns
 
     def _batch_process_worker(self, out_dir: str):
-        """批次處理所有選中的圖片"""
+        """逐張辨識：處理完一張 → 立即顯示表格 → 繼續下一張"""
         total = len(self.image_paths)
         for idx, image_path in enumerate(self.image_paths, 1):
-            if not self.running:  # 允許中途停止
+            if not self.running:
                 break
             self.root.after(0, lambda i=idx, p=image_path: self.log(f"[{i}/{total}] 開始辨識：{os.path.basename(p)}"))
             docx_path = self._process_single_image(out_dir, image_path)
             if docx_path:
                 self._batch_results[image_path] = docx_path
-        # 完成
-        self.root.after(0, lambda: self._on_batch_complete(total))
+                # 立即切換到此圖片，顯示其表格
+                self.root.after(0, lambda p=image_path, d=docx_path: self._show_result_for_image(p, d))
+            else:
+                self.root.after(0, lambda i=idx: self.log(f"[{i}/{total}] 辨識失敗"))
+        # 全部完成，恢復按鈕（不彈提示）
+        self.root.after(0, self._on_batch_done)
+
+    def _show_result_for_image(self, image_path: str, docx_path: str):
+        """切換到指定圖片並顯示其表格"""
+        try:
+            idx = self.image_paths.index(image_path)
+        except ValueError:
+            return
+        self.current_image_idx = idx
+        self.file_var.set(os.path.basename(image_path))
+        self._draw_image_preview()
+        self._update_word_buttons()
+
+    def _on_batch_done(self):
+        """批次完成：恢復按鈕，不提示"""
+        self.running = False
+        for btn in self._get_all_buttons():
+            if btn.winfo_exists():
+                btn.config(state='normal')
+        self.log(f"批次辨識完成，成功 {len(self._batch_results)}/{len(self.image_paths)}")
 
     def _process_single_image(self, out_dir: str, image_path: str):
         """處理單張圖片，返回 docx 路徑或 None"""
@@ -511,23 +663,7 @@ class UnifiedOCRApp:
             self.root.after(0, lambda: self.log("已處理，但未產出 Word"))
             return None
 
-    def _on_batch_complete(self, total: int):
-        """批次完成後的回調"""
-        success_count = len(self._batch_results)
-        self.running = False
-        # re-enable buttons
-        for btn in self._get_all_buttons():
-            if btn.winfo_exists():
-                btn.config(state='normal')
-        if success_count > 0:
-            messagebox.showinfo("完成", f"批次辨識完成\n成功：{success_count}/{total}")
-            # 更新下拉選單並顯示第一個結果
-            self.file_var.set(os.path.basename(self.image_paths[0]))
-            self.current_image_idx = 0
-            self._update_word_buttons()
-            self._draw_image_preview()
-        else:
-            messagebox.showwarning("未完成", "所有圖片皆未產出 Word")
+    
 
     def _process_worker(self, out_dir: str, image_path: str):
         """保留舊方法以防相容，不再使用"""
@@ -559,25 +695,33 @@ class UnifiedOCRApp:
             # Clear tree
             self.tree.delete(*self.tree.get_children())
             self.tree['columns'] = []
+            self._clear_after_table_text()
             self._current_docx_path = None
             self._dirty = False
+            self.after_text_cache = []
             if self.running:
                 self.word_status.config(text="⏳ 辨識中...", fg='orange')
             else:
                 self.word_status.config(text="（尚未產出）", fg='orange')
 
+    def _clear_after_table_text(self):
+        """清除表格下方文字區域"""
+        self.after_table_text.config(state='normal')
+        self.after_table_text.delete('1.0', tk.END)
+        self.after_table_text.config(state='disabled')
+
     # -------------------
     # Word table editor — Treeview
     # -------------------
     def _load_docx_to_treeview(self, docx_path: str):
-        """Load the first table from a .docx into the Treeview."""
+        """載入 first table + 表格後文字段落"""
         try:
             from docx import Document
             doc = Document(docx_path)
             if not doc.tables:
                 self.log("Word 檔案中無表格")
                 return
-            table = doc.tables[0]  # use first table
+            table = doc.tables[0]
 
             # Extract headers
             headers = [cell.text.strip() for cell in table.rows[0].cells]
@@ -597,15 +741,44 @@ class UnifiedOCRApp:
             # Insert data rows (skip header row 0)
             for row_idx, row in enumerate(table.rows[1:], start=1):
                 values = [cell.text.strip() for cell in row.cells]
-                # Pad/truncate to match header count
                 if len(values) < len(headers):
                     values += [''] * (len(headers) - len(values))
                 elif len(values) > len(headers):
                     values = values[:len(headers)]
                 self.tree.insert('', 'end', iid=f'row_{row_idx}', values=values)
 
+            # 擷取表格後文字段落（表格之後的所有 paragraphs）
+            after_text = []
+            table_end_element = table._element
+            found_table = False
+            for para in doc.element.body:
+                if para is table_end_element:
+                    found_table = True
+                    continue
+                if found_table:
+                    # 擷取後續段落文字（跳過其他表格元素）
+                    from docx.oxml.ns import qn
+                    if para.tag.endswith('}p'):
+                        text = para.text.strip() if hasattr(para, 'text') else ''
+                        if text:
+                            after_text.append(text)
+
+            # 顯示
+            self.after_table_text.config(state='normal')
+            self.after_table_text.delete('1.0', tk.END)
+            if after_text:
+                self.after_table_text.insert('1.0', '\n'.join(after_text))
+                self.after_table_label.pack()
+                self.after_table_frame.pack(fill='x', pady=(4, 0))
+            else:
+                self.after_table_text.insert('1.0', '（無）')
+                self.after_table_label.pack()
+                self.after_table_frame.pack(fill='x', pady=(4, 0))
+            self.after_table_text.config(state='disabled')
+
             self._current_docx_path = docx_path
             self._dirty = False
+            self.after_text_cache = after_text  # 保存以備回存
             self.log(f"已載入表格：{len(table.rows)-1} 列 × {len(headers)} 欄")
         except Exception as e:
             self.log(f"載入 Word 表格失敗：{e}")
@@ -695,32 +868,31 @@ class UnifiedOCRApp:
             self._edit_col_idx = None
 
     def _save_treeview_to_docx(self):
-        """Write Treeview data back to the original .docx (first table)."""
-        # Ensure any pending cell edit is committed before saving
+        """儲存 Treeview 資料回 Word → 保留表格後文字 → 靜默二次確認"""
         if self._edit_entry:
             self._finish_edit()
         if not self._current_docx_path or not os.path.exists(self._current_docx_path):
-            messagebox.showerror("錯誤", "找不到原始 Word 檔案")
+            self.log("找不到原始 Word 檔案，跳過儲存")
             return
         if not self._dirty:
-            messagebox.showinfo("提示", "資料未變更，無需儲存")
+            self.log("資料未變更，無需儲存")
             return
 
         try:
             from docx import Document
             doc = Document(self._current_docx_path)
             if not doc.tables:
-                messagebox.showerror("錯誤", "Word 檔案中無表格")
+                self.log("Word 檔案中無表格，跳過儲存")
                 return
             table = doc.tables[0]
 
             headers = list(self.tree['columns'])
             row_ids = self.tree.get_children()
 
-            # Update each data row (skip header row 0)
+            # Update each data row
             for i, row_id in enumerate(row_ids):
                 values = self.tree.item(row_id, 'values')
-                word_row_idx = i + 1  # row 0 is header
+                word_row_idx = i + 1
                 if word_row_idx >= len(table.rows):
                     break
                 row = table.rows[word_row_idx]
@@ -728,13 +900,64 @@ class UnifiedOCRApp:
                     if j < len(row.cells):
                         row.cells[j].text = str(val)
 
+            # 保留表格後文字（不異動）
             doc.save(self._current_docx_path)
             self._dirty = False
-            self.log(f"已儲存回 Word：{self._current_docx_path}")
-            messagebox.showinfo("完成", "已儲存回 Word 檔")
+            self.log(f"已儲存回 Word：{os.path.basename(self._current_docx_path)}")
+
+            # 靜默二次確認：重新讀取 Word，比對表格資料
+            self._silent_verify_and_retry(row_ids, headers)
+
         except Exception as e:
             self.log(f"儲存 Word 失敗：{e}")
-            messagebox.showerror("錯誤", f"儲存失敗：{e}")
+
+    def _silent_verify_and_retry(self, row_ids, headers):
+        """靜默比對 Word 表格與 Treeview 資料；不一致則再儲存（最多 3 次）"""
+        max_retry = 3
+        for attempt in range(1, max_retry + 1):
+            try:
+                from docx import Document
+                doc2 = Document(self._current_docx_path)
+                if not doc2.tables:
+                    return
+                table2 = doc2.tables[0]
+
+                mismatch = False
+                mismatches = []
+                for i, row_id in enumerate(row_ids):
+                    tv_values = self.tree.item(row_id, 'values')
+                    word_row_idx = i + 1
+                    if word_row_idx >= len(table2.rows):
+                        break
+                    row = table2.rows[word_row_idx]
+                    for j, tv_val in enumerate(tv_values):
+                        w_val = row.cells[j].text.strip() if j < len(row.cells) else ''
+                        if str(tv_val) != w_val:
+                            mismatch = True
+                            mismatches.append(f"列{i+1}欄{j}: Treeview={tv_val} Word={w_val}")
+
+                if not mismatch:
+                    self.log(f"驗證通過 ✓（第{attempt}次檢查）")
+                    return
+
+                self.log(f"驗證不一致（第{attempt}次），重新儲存...")
+                # 重新寫入
+                for i, row_id in enumerate(row_ids):
+                    tv_values = self.tree.item(row_id, 'values')
+                    word_row_idx = i + 1
+                    if word_row_idx >= len(table2.rows):
+                        break
+                    row = table2.rows[word_row_idx]
+                    for j, val in enumerate(tv_values):
+                        if j < len(row.cells):
+                            row.cells[j].text = str(val)
+                doc2.save(self._current_docx_path)
+
+            except Exception as e:
+                self.log(f"驗證/重存失敗（第{attempt}次）：{e}")
+                return
+
+        self.log(f"驗證未通過（已重試{max_retry}次）")
 
     # -------------------
     # Logging
