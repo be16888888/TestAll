@@ -299,9 +299,7 @@ class UnifiedOCRApp:
             self.file_var.set(names[0])
             self.log(f"已選擇 {len(paths)} 個檔案：{', '.join(names)}")
             self.latest_docx_path = None
-            self.preview_text.config(state='normal')
-            self.preview_text.delete('1.0', 'end')
-            self.preview_text.config(state='disabled')
+            self._update_word_buttons()
             self._draw_image_preview()
 
     def _on_file_selected(self, event=None):
