@@ -868,9 +868,27 @@ class UnifiedOCRApp:
 
             # 擷取表格後文字段落（表格之後的所有 paragraphs）
             after_text = []
+            # 擷取表格前文字段落（表格上方：含庫別/日期標頭資訊）
+            before_text = []
             table_end_element = table._element
             found_table = False
             for para in doc.element.body:
+                if para is table_end_element:
+                    found_table = True
+                    continue
+                if found_table:
+                    # 擷取後續段落文字（跳過其他表格元素）
+                    from docx.oxml.ns import qn
+                    if para.tag.endswith('}p'):
+                        text = para.text.strip() if hasattr(para, 'text') else ''
+                        if text:
+                            after_text.append(text)
+                else:
+                    # 表格之前的段落 = 上方文字
+                    if para.tag.endswith('}p'):
+                        text = para.text.strip() if hasattr(para, 'text') else ''
+                        if text:
+                            before_text.append(text)
                 if para is table_end_element:
                     found_table = True
                     continue
