@@ -893,7 +893,7 @@ class UnifiedOCRApp:
                 self.after_table_text.insert('1.0', '（無）')
                 self.after_table_label.pack()
                 self.after_table_frame.pack(fill='x', pady=(4, 0))
-            self.after_table_text.config(state='disabled')
+            self.after_table_text.config(state='normal')
 
             self._current_docx_path = docx_path
             self._dirty = False
