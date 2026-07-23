@@ -333,7 +333,7 @@ class UnifiedOCRApp:
         # --- 入庫資訊區 (Phase 3) ---
         db_row = tk.Frame(right, bg=BG_COLOR)
         db_row.pack(fill='x', pady=(8,0))
-        tk.Label(db_row,text="業務日期:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=0,sticky='w',padx=(0,4))
+        tk.Label(db_row,text="表格日期:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=0,sticky='w',padx=(0,4))
         self.biz_date_var = tk.StringVar(value=time.strftime("%Y-%m-%d"))
         tk.Entry(db_row,textvariable=self.biz_date_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=1,padx=(0,12))
         tk.Label(db_row,text="庫別:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=2,sticky='w',padx=(0,4))
