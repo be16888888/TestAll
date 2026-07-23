@@ -827,7 +827,7 @@ class UnifiedOCRApp:
         """清除表格下方文字區域"""
         self.after_table_text.config(state='normal')
         self.after_table_text.delete('1.0', tk.END)
-        self.after_table_text.config(state='disabled')
+        # 保持 normal 以便使用者編輯（下方文字含日期/下收手寫字）
 
     # -------------------
     # Word table editor — Treeview
