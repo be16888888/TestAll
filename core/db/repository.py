@@ -621,6 +621,51 @@ class SQLiteReviewRepository:
             ))
             return cur.lastrowid
     
+    def insert_reviewed_rows(self, items: list[ReviewedItem]) -> int:
+        """Phase 9: 批次插入多品項日結表 (同一張表多列)。各行依 (review_date, library, item_name) UPSERT。"""
+        if not items:
+            return 0
+        with get_conn(self.db_path) as conn:
+            cur = conn.executemany("""
+                INSERT INTO ocr_reviewed_items (
+                    review_date, library, item_name, ocr_raw_name, ocr_text,
+                    word_path, quantity, unit, source_image_path, source_image_hash,
+                    confidence, page_count, reviewer, reviewed_at, is_verified, notes,
+                    prev_stock, outbound_qty, inbound_qty, closing_qty, unit_price, loss_qty
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(review_date, library, item_name) DO UPDATE SET
+                    ocr_raw_name = excluded.ocr_raw_name,
+                    ocr_text = excluded.ocr_text,
+                    word_path = excluded.word_path,
+                    quantity = excluded.quantity,
+                    unit = excluded.unit,
+                    source_image_path = excluded.source_image_path,
+                    source_image_hash = excluded.source_image_hash,
+                    confidence = excluded.confidence,
+                    page_count = excluded.page_count,
+                    reviewer = excluded.reviewer,
+                    reviewed_at = excluded.reviewed_at,
+                    is_verified = excluded.is_verified,
+                    notes = excluded.notes,
+                    prev_stock = excluded.prev_stock,
+                    outbound_qty = excluded.outbound_qty,
+                    inbound_qty = excluded.inbound_qty,
+                    closing_qty = excluded.closing_qty,
+                    unit_price = excluded.unit_price,
+                    loss_qty = excluded.loss_qty,
+                    updated_at = datetime('now')
+            """, [
+                (it.review_date, it.library, it.item_name, it.ocr_raw_name,
+                 it.ocr_text, it.word_path, it.quantity, it.unit,
+                 it.source_image_path, it.source_image_hash,
+                 it.confidence, it.page_count, it.reviewer, it.reviewed_at,
+                 it.is_verified, it.notes,
+                 it.prev_stock, it.outbound_qty, it.inbound_qty, it.closing_qty,
+                 it.unit_price, it.loss_qty)
+                for it in items
+            ])
+            return cur.rowcount
+    
     def get_reviewed_item(self, review_date: str, library: str, item_name: str) -> Optional[ReviewedItem]:
         with get_conn(self.db_path) as conn:
             row = conn.execute("""
