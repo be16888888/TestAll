@@ -889,17 +889,6 @@ class UnifiedOCRApp:
                         text = para.text.strip() if hasattr(para, 'text') else ''
                         if text:
                             before_text.append(text)
-                if para is table_end_element:
-                    found_table = True
-                    continue
-                if found_table:
-                    # 擷取後續段落文字（跳過其他表格元素）
-                    from docx.oxml.ns import qn
-                    if para.tag.endswith('}p'):
-                        text = para.text.strip() if hasattr(para, 'text') else ''
-                        if text:
-                            after_text.append(text)
-
             # 顯示
             self.after_table_text.config(state='normal')
             self.after_table_text.delete('1.0', tk.END)
