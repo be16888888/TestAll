@@ -1081,7 +1081,7 @@ class UnifiedOCRApp:
             return re.sub(r'\s+', '', m.group(1))
         # 退回：整行含 庫/倉 -> 取第一個含庫/倉的最短片段 (如 4-1庫 / A倉 / 凍庫)
         if '庫' in s or '倉' in s:
-            m = re.search(r'[\w一-鿿]*[庫倉][\w一-鿿]*', s)
+            m = re.search(r'[\w一-鿿\-]*[庫倉][\w一-鿿\-]*', s)
             if m:
                 return re.sub(r'\s+', '', m.group(0))
         return None
