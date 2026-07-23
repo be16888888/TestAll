@@ -973,6 +973,79 @@ class UnifiedOCRApp:
         if self._edit_entry:
             self._finish_edit()
 
+    def _on_tree_select(self, event):
+        """單擊/選中表格列 -> 更新右側品項屬性顯示區 (含近日進貨)。"""
+        sel = self.tree.selection()
+        if not sel:
+            return
+        row_id = sel[0]
+        vals = self.tree.item(row_id, 'values')
+        headers = list(self.tree['columns'])
+        # 品項名：表頭含「品項」的欄
+        name = ""
+        for i, h in enumerate(headers):
+            if '品項' in str(h) or 'item' in str(h).lower():
+                if i < len(vals):
+                    name = str(vals[i]).strip()
+                break
+        if name:
+            self._update_item_attr_display(name)
+
+    def _update_item_attr_display(self, item_name: str):
+        """更新右側品項屬性顯示區：分類/保存天數/損耗率 + 該品項近日進貨。"""
+        # 基礎預設
+        self.attr_name_lbl.config(text=f"品項：{item_name}")
+        cat = ""
+        shelf = "-"
+        loss = "-"
+        try:
+            ci = next((c for c in self._ocr_service.repo.get_all_canonical_items(active_only=False)
+                       if c.canonical_name == item_name), None)
+            if ci:
+                cat = ci.category or "-"
+            attrs = self._ocr_service.get_item_attributes(item_name)
+            shelf = attrs.get('shelf_life_days') or "-"
+            loss = attrs.get('normal_loss_pct') or "-"
+        except Exception:
+            pass
+        self.attr_cat_lbl.config(text=f"分類：{cat}")
+        self.attr_shelf_lbl.config(text=f"保存天數：{shelf}")
+        self.attr_loss_lbl.config(text=f"損耗率：{loss}")
+
+        # 近日進貨：該品項最近一日有進貨量 (inbound_qty 欄，多品項日結表；回退 library='inbound')
+        recent = ""
+        try:
+            biz = self.biz_date_var.get().strip()
+            biz_iso = self._normalize_date_to_iso(biz) or biz
+            qty = self._get_item_recent_inbound(item_name, biz_iso)
+            recent = f"{qty:.1f}" if qty is not None else ""
+        except Exception:
+            pass
+        self.attr_recent_lbl.config(text=f"近日進貨：{recent}" if recent else "近日進貨：-")
+
+    def _get_item_recent_inbound(self, item_name: str, before_date: str) -> float | None:
+        """查該品項最近一日進貨量。優先 inbound_qty 欄(多品項日結表，辨識庫別)，回退 library='inbound'。"""
+        repo = self._ocr_service.repo
+        # 1) inbound_qty 欄 (新多品項模式)
+        try:
+            rs = repo.execute(
+                "SELECT MAX(review_date) AS d, SUM(inbound_qty) AS q FROM ocr_reviewed_items "
+                "WHERE item_name=? AND inbound_qty>0 AND review_date <= ?", (item_name, before_date))
+            if rs and rs[0]["d"]:
+                return float(rs[0]["q"] or 0) or None
+        except Exception:
+            pass
+        # 2) 舊模式 library='inbound'
+        try:
+            rs = repo.execute(
+                "SELECT SUM(quantity) AS q FROM ocr_reviewed_items "
+                "WHERE item_name=? AND library='inbound' AND review_date <= ?", (item_name, before_date))
+            if rs and rs[0]["q"]:
+                return float(rs[0]["q"] or 0) or None
+        except Exception:
+            pass
+        return None
+
     def _on_cell_double_click(self, event):
         """Start editing the double-clicked cell."""
         if self._edit_entry:
