@@ -914,14 +914,10 @@ class UnifiedOCRApp:
                         text = para.text.strip() if hasattr(para, 'text') else ''
                         if text:
                             before_text.append(text)
-            # Phase 10.5: 將檔名（辨識標頭，如 115年3月17日(3庫)）補入「表格上方文字」框首行，
-            # 確保 OCR 回傳的日期+庫別標頭一定可見（可供手改 / 供 _auto_fill_from_ocr 擷取）。
-            # 若表格前已有辨識段落 (如 "(3庫)進、銷貨庫存表 115年 3月 17日") 仍保留，
-            # 檔名僅作去重補首行，不覆蓋既有內容。
-            if docx_path:
-                hdr = os.path.splitext(os.path.basename(docx_path))[0]  # 去 .docx
-                if hdr and hdr not in before_text:
-                    before_text.insert(0, hdr)
+            # Phase 10.5: 將表格前「(X庫)進、銷貨庫存表 / 日期 / 填單者 / 單位」標頭資訊
+            # 合併為同一行 (用戶規則)，避免與下方表格或檔名重複顯示。
+            # 不再補檔名 (檔名與 OCR 標頭皆含日期+庫別，補入會造成重複)。
+            before_text = _merge_header_lines(before_text)
             # 顯示下方文字
             self.after_table_text.config(state='normal')
             self.after_table_text.delete('1.0', tk.END)
