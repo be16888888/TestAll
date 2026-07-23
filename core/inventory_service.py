@@ -163,6 +163,28 @@ class InventoryService:
             (review_date, library, item_name))
         return float(dict(rs[0]).get("SUM(quantity)", 0) or 0) if rs else 0.0
 
+    def get_recent_inbound(self, before_date: str | None = None) -> tuple[str | None, dict[str, float]]:
+        """近日進貨：找最近一日有進貨(inbound)的日期，回傳 (日期, {品項: 進貨量})。
+        - before_date 為 None 時取全體最近一日；否則取 <= before_date 的最近一日。
+        - 僅回傳該日實際有進貨的品項；沒進貨的品項不列入(呼叫端顯示為空)。
+        """
+        if before_date:
+            rs = self.repo.execute(
+                "SELECT MAX(review_date) AS d FROM ocr_reviewed_items "
+                "WHERE library='inbound' AND review_date <= ?", (before_date,))
+        else:
+            rs = self.repo.execute(
+                "SELECT MAX(review_date) AS d FROM ocr_reviewed_items WHERE library='inbound'")
+        recent_date = dict(rs[0]).get("d") if rs else None
+        if not recent_date:
+            return None, {}
+        rows = self.repo.execute(
+            "SELECT item_name, SUM(quantity) AS q FROM ocr_reviewed_items "
+            "WHERE library='inbound' AND review_date = ? GROUP BY item_name",
+            (recent_date,))
+        result = {dict(r)["item_name"]: float(dict(r)["q"] or 0) for r in rows}
+        return recent_date, result
+
     def _actual_closing(self, review_date: str, library: str, item_name: str) -> float | None:
         inv = self.repo.get_daily_inventory(review_date, library, item_name)
         return inv.actual_qty if inv else None
