@@ -69,6 +69,13 @@ class ReviewedItem:
     word_path: str
     quantity: float
     unit: str
+    # Phase 9: 多品項日結表欄位
+    prev_stock: float = 0.0
+    outbound_qty: float = 0.0
+    inbound_qty: float = 0.0
+    closing_qty: float = 0.0
+    unit_price: Optional[str] = None
+    loss_qty: float = 0.0
     source_image_path: str
     source_image_hash: str
     confidence: Optional[float]
