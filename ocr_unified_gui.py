@@ -1212,13 +1212,13 @@ class UnifiedOCRApp:
         import re
         s = str(text)
         # 西元：2026-07-22 / 2026/7/22 / 2026.7.22
-        m = re.search(r'(19|20)(\d{2})[./\-年](\d{1,2})[./\-月](\d{1,2})日?', s)
+        m = re.search(r'(?<![年\d])(\d{2,3})[./\-年]\s*(\d{1,2})[./\-月]\s*(\d{1,2})日?', s)
         if m:
             y = int(m.group(1) + m.group(2)); mo = int(m.group(3)); d = int(m.group(4))
             if 1 <= mo <= 12 and 1 <= d <= 31:
                 return f"{y:04d}-{mo:02d}-{d:02d}"
         # 民國：115/07/22 / 115-07-22 / 115年7月17日 (民國年 1~199)
-        m = re.search(r'(?<![\d年])(\d{2,3})[./\-年](\d{1,2})[./\-月](\d{1,2})日?', s)
+        m = re.search(r'(?<![年\d])(\d{2,3})[./\-年]\s*(\d{1,2})[./\-月]\s*(\d{1,2})日?', s)
         if m:
             roc = int(m.group(1)); mo = int(m.group(2)); d = int(m.group(3))
             if 1 <= roc <= 199 and 1 <= mo <= 12 and 1 <= d <= 31:
@@ -1233,13 +1233,13 @@ class UnifiedOCRApp:
         import re
         s = str(text)
         # 西元 -> 轉民國
-        m = re.search(r'(19|20)(\d{2})[./\-年](\d{1,2})[./\-月](\d{1,2})日?', s)
+        m = re.search(r'(?<![年\d])(\d{2,3})[./\-年]\s*(\d{1,2})[./\-月]\s*(\d{1,2})日?', s)
         if m:
             y = int(m.group(1) + m.group(2)); mo = int(m.group(3)); d = int(m.group(4))
             if 1 <= mo <= 12 and 1 <= d <= 31:
                 return f"{y - 1911:03d}-{mo:02d}-{d:02d}"
         # 民國 -> 直接格式化
-        m = re.search(r'(?<![\d年])(\d{2,3})[./\-年](\d{1,2})[./\-月](\d{1,2})日?', s)
+        m = re.search(r'(?<![年\d])(\d{2,3})[./\-年]\s*(\d{1,2})[./\-月]\s*(\d{1,2})日?', s)
         if m:
             roc = int(m.group(1)); mo = int(m.group(2)); d = int(m.group(3))
             if 1 <= roc <= 199 and 1 <= mo <= 12 and 1 <= d <= 31:
