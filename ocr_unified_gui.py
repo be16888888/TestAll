@@ -1185,40 +1185,119 @@ class UnifiedOCRApp:
             return False
 
     def _save_and_archive(self):
-        """Phase 3: 回存 Word + 入資料庫"""
+        """Phase 3/9: 回存 Word + 入資料庫。
+        Phase 9: 多品項日結表 → 逐列迴圈入庫；每列各自品項 + 數量欄。
+        若表頭為單品項格式（無 進貨量/出貨量 等欄），退回舊單品項邏輯相容。
+        """
         self._save_treeview_to_docx()
         if not self._ensure_db():
             return
         from core.db.repository import compute_image_hash
-        item_name = self.item_name_var.get().strip()
-        if not item_name:
-            try:
-                kids = self.tree.get_children()
-                if kids and self.tree['columns']:
-                    vals = self.tree.item(kids[0], 'values')
-                    if vals and vals[0]:
-                        item_name = str(vals[0]).strip()
-            except Exception:
-                pass
-        if not item_name:
-            self.db_status_lbl.config(text="⚠️ 品項為空", fg='orange')
-            return
+
         biz = self.biz_date_var.get().strip()
         lib = self.lib_var.get().strip()
         wp = self._current_docx_path or ""
         img_path = self.image_paths[self.current_image_idx] if self.current_image_idx < len(self.image_paths) else ""
-        qty = self._parse_quantity_from_tree()
-        ocr_md = self._tree_to_markdown()
         img_hash = compute_image_hash(Path(img_path)) if img_path else "no_image"
-        r = self._ocr_service.save_reviewed_item(
-            review_date=biz, library=lib, item_name=item_name,
-            ocr_raw_name=item_name, ocr_text=ocr_md, word_path=wp,
-            quantity=qty, source_image_path=img_path, source_image_hash=img_hash)
-        if r.ok:
-            self.db_status_lbl.config(text=f"✅ 已入庫 ({lib}/{item_name})", fg='#00cc00')
-            self.log(f"入庫成功 {item_name} ({biz}/{lib})")
-            if r.alerts:
-                self._show_alerts(r.alerts)
+
+        headers = list(self.tree['columns'])
+        row_ids = self.tree.get_children()
+        if not row_ids:
+            self.db_status_lbl.config(text="⚠️ 表格無資料", fg='orange')
+            return
+
+        # 欄位對應 (表頭含關鍵字 -> 資料庫欄位)
+        def col_idx(*keys):
+            for i, h in enumerate(headers):
+                hs = str(h)
+                if any(k in hs for k in keys):
+                    return i
+            return -1
+
+        i_name = col_idx("品項", "item")
+        i_prev = col_idx("前日", "期初", "prev")
+        i_out = col_idx("出貨", "out")
+        i_in = col_idx("進貨", "inbound", "in_")
+        i_close = col_idx("庫存", "結存", "closing")
+        i_price = col_idx("進價", "price", "單價")
+        i_loss = col_idx("損耗", "loss")
+        i_note = col_idx("備註", "note", "remark")
+        i_qty = col_idx("數量", "quantity", "qty")
+
+        is_multi = i_in >= 0 or i_out >= 0  # 含進貨/出貨欄 => 多品項日結表
+
+        def to_float(v):
+            try:
+                return float(str(v).strip())
+            except (ValueError, TypeError):
+                return 0.0
+
+        if is_multi:
+            # Phase 9: 逐列多品項入庫
+            rows = []
+            for rid in row_ids:
+                vals = list(self.tree.item(rid, 'values'))
+                name = str(vals[i_name]).strip() if i_name >= 0 and i_name < len(vals) else ""
+                if not name:
+                    continue
+                md = self._row_to_markdown(vals, headers)
+                row = {
+                    "review_date": biz, "library": lib, "item_name": name,
+                    "ocr_raw_name": name, "ocr_text": md, "word_path": wp,
+                    "source_image_path": img_path, "source_image_hash": img_hash,
+                    "prev_stock": to_float(vals[i_prev]) if i_prev >= 0 else 0.0,
+                    "outbound_qty": to_float(vals[i_out]) if i_out >= 0 else 0.0,
+                    "inbound_qty": to_float(vals[i_in]) if i_in >= 0 else 0.0,
+                    "closing_qty": to_float(vals[i_close]) if i_close >= 0 else 0.0,
+                    "unit_price": str(vals[i_price]).strip() if i_price >= 0 and i_price < len(vals) else "",
+                    "loss_qty": to_float(vals[i_loss]) if i_loss >= 0 else 0.0,
+                    "quantity": to_float(vals[i_in]) if i_in >= 0 else (to_float(vals[i_qty]) if i_qty >= 0 else 0.0),
+                }
+                if i_note >= 0 and i_note < len(vals):
+                    row["notes"] = str(vals[i_note]).strip()
+                rows.append(row)
+            if not rows:
+                self.db_status_lbl.config(text="⚠️ 無有效品項列", fg='orange')
+                return
+            results = self._ocr_service.save_reviewed_rows(rows)
+            ok = [r for r in results if r.ok]
+            failed = [r for r in results if not r.ok]
+            self.db_status_lbl.config(
+                text=f"✅ 多品項入庫 {len(ok)}/{len(results)} 列 ({lib})",
+                fg='#00cc00')
+            self.log(f"多品項入庫完成：成功 {len(ok)} 筆")
+            for r in failed:
+                self.log(f"⚠️ 入庫失敗：{r.message} {r.errors}")
+            # 顯示第一個有 alert 的結果
+            for r in results:
+                if r.alerts:
+                    self._show_alerts(r.alerts)
+                    break
+        else:
+            # 舊單品項相容邏輯
+            item_name = self.item_name_var.get().strip()
+            if not item_name:
+                try:
+                    if row_ids and self.tree['columns']:
+                        vals = self.tree.item(row_ids[0], 'values')
+                        if vals and vals[0]:
+                            item_name = str(vals[0]).strip()
+                except Exception:
+                    pass
+            if not item_name:
+                self.db_status_lbl.config(text="⚠️ 品項為空", fg='orange')
+                return
+            qty = self._parse_quantity_from_tree()
+            ocr_md = self._tree_to_markdown()
+            r = self._ocr_service.save_reviewed_item(
+                review_date=biz, library=lib, item_name=item_name,
+                ocr_raw_name=item_name, ocr_text=ocr_md, word_path=wp,
+                quantity=qty, source_image_path=img_path, source_image_hash=img_hash)
+            if r.ok:
+                self.db_status_lbl.config(text=f"✅ 已入庫 ({lib}/{item_name})", fg='#00cc00')
+                self.log(f"入庫成功 {item_name} ({biz}/{lib})")
+                if r.alerts:
+                    self._show_alerts(r.alerts)
         else:
             self.db_status_lbl.config(text=f"❌ {r.errors[0][:30]}", fg='red')
             self.log(f"入庫失敗 {r.errors}")
