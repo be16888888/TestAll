@@ -313,7 +313,7 @@ class UnifiedOCRApp:
         )
         self.before_table_label.pack(anchor='w', pady=(6, 2))
         self.before_table_text = scrolledtext.ScrolledText(
-            self.before_table_frame, height=4, bg=LOG_BG, fg=LOG_FG,
+            self.before_table_frame, height=2, bg=LOG_BG, fg=LOG_FG,
             font=BOX_FONT, state='normal', wrap='word'
         )
         self.before_table_text.pack(fill='x')
