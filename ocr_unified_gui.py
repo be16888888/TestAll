@@ -1051,10 +1051,10 @@ class UnifiedOCRApp:
         except Exception:
             pass
         for txt in date_sources:
-            iso = self._parse_date_to_iso(txt)
-            if iso:
-                self.biz_date_var.set(iso)
-                self.log(f"已自動帶入表格日期：{iso}")
+            roc = self._parse_date_to_roc(txt)
+            if roc:
+                self.biz_date_var.set(roc)
+                self.log(f"已自動帶入表格日期：{roc}")
                 break
 
         # 庫別來源：表格上方文字 (含 庫/倉 的行)
