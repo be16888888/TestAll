@@ -194,9 +194,16 @@ class OCRReviewService:
         confidence: float | None = None,
         page_count: int = 1,
         reviewer: str | None = None,
-        is_verified: int = 1,        # 點擊按鈕 = 人工複核通過
+        is_verified: int = 1,
         notes: str = "",
         unit: str = "公斤",
+        # Phase 9: 多品項日結表欄位 (向後相容，預設 0/None)
+        prev_stock: float = 0.0,
+        outbound_qty: float = 0.0,
+        inbound_qty: float = 0.0,
+        closing_qty: float = 0.0,
+        unit_price: str | None = None,
+        loss_qty: float = 0.0,
     ) -> ReviewResult:
         """
         核心流程：
