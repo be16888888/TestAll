@@ -1620,7 +1620,7 @@ class UnifiedOCRApp:
 
         win = tk.Toplevel(self.root)
         title = f"庫存概览 {biz}（全部庫別）"
-        win.title(title); win.geometry("1200x540"); win.configure(bg=BG_COLOR)
+        win.title(title); win.geometry("1300x540"); win.configure(bg=BG_COLOR)
         abnormal = [d for d in diffs if d.is_abnormal]
         normal = [d for d in diffs if not d.is_abnormal]
         # 近日進貨：永遠取全資料庫最新有進貨量(inbound_qty>0)的那一天（不分庫別、不受表格日期限制）
