@@ -1679,15 +1679,15 @@ class UnifiedOCRApp:
             self.log(f"庫存預覽：{len(diffs)} 筆（庫別：{', '.join(libs) or '無'}）")
 
         win = tk.Toplevel(self.root)
-        title = f"庫存概览 {biz}" + (f"/{lib}" if lib else "（全部庫別）")
+        title = f"庫存概览 {biz}（全部庫別）"
         win.title(title); win.geometry("900x540"); win.configure(bg=BG_COLOR)
         abnormal = [d for d in diffs if d.is_abnormal]
         normal = [d for d in diffs if not d.is_abnormal]
-        # 近日進貨：最近一日有進貨的品項數量（跨庫別彙總）
-        recent_date, recent_inbound = self._inv_service.get_recent_inbound(before_date=biz)
+        # 近日進貨：同日期 (biz 當日) 所有表格有進貨的品項進貨量 (跨庫別彙總)
+        recent_date, recent_inbound = self._inv_service.get_recent_inbound(before_date=biz, same_day=True)
         recent_hint = f"（近日進貨基準日：{recent_date}）" if recent_date else "（無進貨紀錄）"
         tk.Label(win, text=f"共 {len(diffs)} 品項（🔴異常 {len(abnormal)} / ⚪正常 {len(normal)}）{recent_hint}",
-                 fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(anchor='w', padx=14, pady=(10, 4))
+                 fg=FG_COLOR, bg=BG_COLOR, font=BOX_FONT).pack(anchor='w', padx=14, pady=(10, 4))
         cvs = tk.Canvas(win, bg=BG_COLOR, highlightthickness=0)
         sb = ttk.Scrollbar(win, orient='vertical', command=cvs.yview)
         box = tk.Frame(cvs, bg=BG_COLOR)
@@ -1695,7 +1695,7 @@ class UnifiedOCRApp:
         cvs.create_window((0, 0), window=box, anchor='nw'); cvs.configure(yscrollcommand=sb.set)
         hdr = tk.Frame(box, bg=BG_COLOR)
         for i, txt in enumerate(["庫別", "品項", "近日進貨", "理論", "實際", "損耗量", "損耗率"]):
-            tk.Label(hdr, text=txt, fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT, width=12).grid(row=0, column=i, padx=2)
+            tk.Label(hdr, text=txt, fg=FG_COLOR, bg=BG_COLOR, font=BOX_FONT, width=12).grid(row=0, column=i, padx=2)
         hdr.pack(anchor='w', padx=8, pady=4)
         for color, grp in [('#ff4444', abnormal), ('#cccccc', normal)]:
             for d in grp:
@@ -1704,11 +1704,11 @@ class UnifiedOCRApp:
                 for j, val in enumerate([d.library, d.item_name, recent_qty,
                                          f"{d.expected_qty:.1f}", f"{d.actual_qty:.1f}",
                                          f"{d.loss_qty:+.2f}", f"{d.loss_pct:.1f}%"]):
-                    tk.Label(rw, text=val, fg=color, bg=BG_COLOR, font=SMALL_FONT, width=12).grid(row=0, column=j, padx=2)
+                    tk.Label(rw, text=val, fg=color, bg=BG_COLOR, font=BOX_FONT, width=12).grid(row=0, column=j, padx=2)
                 rw.pack(anchor='w', padx=8)
         cvs.pack(side='left', fill='both', expand=True, padx=8, pady=8)
         sb.pack(side='right', fill='y')
-        tk.Button(win, text="關閉", command=win.destroy, bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT).pack(pady=6)
+        tk.Button(win, text="關閉", command=win.destroy, bg=BTN_BG, fg=FG_COLOR, font=BOX_FONT).pack(pady=6)
 
     # --- Phase 7: 品項管理 ---
     def _show_item_manager(self):
