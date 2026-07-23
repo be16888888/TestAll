@@ -1086,22 +1086,60 @@ class UnifiedOCRApp:
 
     @staticmethod
     def _parse_date_to_iso(text: str) -> str | None:
-        """解析文字中的日期為 ISO (YYYY-MM-DD)。支援民國/西元年。"""
+        """解析文字中的日期為西元 ISO (YYYY-MM-DD)，供資料庫儲存。
+        支援：西元 2026-07-22 / 2026/7/22；民國 115/07/22 / 115-07-22；中文 115年7月17日。
+        """
         import re
         s = str(text)
         # 西元：2026-07-22 / 2026/7/22 / 2026.7.22
-        m = re.search(r'(19|20)(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})', s)
+        m = re.search(r'(19|20)(\d{2})[./\-年](\d{1,2})[./\-月](\d{1,2})日?', s)
         if m:
             y = int(m.group(1) + m.group(2)); mo = int(m.group(3)); d = int(m.group(4))
             if 1 <= mo <= 12 and 1 <= d <= 31:
                 return f"{y:04d}-{mo:02d}-{d:02d}"
-        # 民國：115/7/22 / 115.7.22 (民國年 1~199)
-        m = re.search(r'(?<!\d)(\d{2,3})[./\-](\d{1,2})[./\-](\d{1,2})', s)
+        # 民國：115/07/22 / 115-07-22 / 115年7月17日 (民國年 1~199)
+        m = re.search(r'(?<![\d年])(\d{2,3})[./\-年](\d{1,2})[./\-月](\d{1,2})日?', s)
         if m:
             roc = int(m.group(1)); mo = int(m.group(2)); d = int(m.group(3))
             if 1 <= roc <= 199 and 1 <= mo <= 12 and 1 <= d <= 31:
                 return f"{roc + 1911:04d}-{mo:02d}-{d:02d}"
         return None
+
+    @staticmethod
+    def _parse_date_to_roc(text: str) -> str | None:
+        """解析文字中的日期為民國顯示格式 (ROC-MM-DD，月日不足2位補0)。
+        例：115年7月17日 -> 115-07-17；115/07/22 -> 115-07-22；2026-07-22 -> 115-07-22。
+        """
+        import re
+        s = str(text)
+        # 西元 -> 轉民國
+        m = re.search(r'(19|20)(\d{2})[./\-年](\d{1,2})[./\-月](\d{1,2})日?', s)
+        if m:
+            y = int(m.group(1) + m.group(2)); mo = int(m.group(3)); d = int(m.group(4))
+            if 1 <= mo <= 12 and 1 <= d <= 31:
+                return f"{y - 1911:03d}-{mo:02d}-{d:02d}"
+        # 民國 -> 直接格式化
+        m = re.search(r'(?<![\d年])(\d{2,3})[./\-年](\d{1,2})[./\-月](\d{1,2})日?', s)
+        if m:
+            roc = int(m.group(1)); mo = int(m.group(2)); d = int(m.group(3))
+            if 1 <= roc <= 199 and 1 <= mo <= 12 and 1 <= d <= 31:
+                return f"{roc:03d}-{mo:02d}-{d:02d}"
+        return None
+
+    @staticmethod
+    def _normalize_date_to_iso(display: str) -> str:
+        """將表格日期欄的顯示值 (可能為民國 115-07-17 或西元 2026-07-17) 轉西元 ISO 供入庫。"""
+        d = str(display).strip()
+        if not d:
+            return ""
+        iso = UnifiedOCRApp._parse_date_to_iso(d)
+        if iso:
+            return iso
+        # 已是西元格式則直接回傳
+        import re
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', d):
+            return d
+        return d
 
     def _write_after_text_to_doc(self, doc, table):
         """將 UI「表格下方文字」(含日期/下收手寫字) 寫回 Word 表格後的段落。
