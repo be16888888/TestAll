@@ -57,10 +57,11 @@ for lib, items in [("3庫", [("高麗菜", 361.0), ("包心白", 95.0)]),
     except Exception:
         pass
     for name, qty in items:
-        # item_name FK -> canonical_items.canonical_name
+        # item_name FK -> canonical_items.canonical_name (填滿 NOT NULL 欄)
         repo.execute(
-            "INSERT INTO canonical_items (canonical_name, is_active) VALUES (?, 1) "
-            "ON CONFLICT(canonical_name) DO UPDATE SET is_active=1",
+            "INSERT INTO canonical_items (canonical_name, first_seen_at, last_seen_at, is_active) "
+            "VALUES (?, datetime('now'), datetime('now'), 1) "
+            "ON CONFLICT(canonical_name) DO UPDATE SET is_active=1, last_seen_at=datetime('now')",
             (name,))
         repo.execute(
             "INSERT INTO ocr_reviewed_items "
