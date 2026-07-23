@@ -911,7 +911,7 @@ class UnifiedOCRApp:
                         text = para.text.strip() if hasattr(para, 'text') else ''
                         if text:
                             before_text.append(text)
-            # 顯示
+            # 顯示下方文字
             self.after_table_text.config(state='normal')
             self.after_table_text.delete('1.0', tk.END)
             if after_text:
@@ -924,9 +924,23 @@ class UnifiedOCRApp:
                 self.after_table_frame.pack(fill='x', pady=(4, 0))
             self.after_table_text.config(state='normal')
 
+            # 顯示上方文字 (供日期/庫別辨識錯誤時修改)
+            self.before_table_text.config(state='normal')
+            self.before_table_text.delete('1.0', tk.END)
+            if before_text:
+                self.before_table_text.insert('1.0', '\n'.join(before_text))
+                self.before_table_label.pack()
+                self.before_table_frame.pack(fill='x', pady=(4, 0))
+            else:
+                self.before_table_text.insert('1.0', '（無）')
+                self.before_table_label.pack()
+                self.before_table_frame.pack(fill='x', pady=(4, 0))
+            self.before_table_text.config(state='normal')
+
             self._current_docx_path = docx_path
             self._dirty = False
             self.after_text_cache = after_text  # 保存以備回存
+            self.before_text_cache = before_text  # 保存以備回存
             # 自動帶入：日期(表格上方優先) + 庫別(表格上方辨識文字，如 4-1庫)
             # 未回存前自動帶入；使用者手動修改後以修改為準。
             self._auto_fill_from_ocr(before_text, after_text, headers)
