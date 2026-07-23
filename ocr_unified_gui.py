@@ -352,6 +352,7 @@ class UnifiedOCRApp:
         # Bind double-click for cell editing
         self.tree.bind('<Double-1>', self._on_cell_double_click)
         self.tree.bind('<Button-1>', self._on_tree_click)
+        self.tree.bind('<<TreeviewSelect>>', self._on_tree_select)
 
         # --- 入庫資訊區 (Phase 3) ---
         db_row = tk.Frame(right, bg=BG_COLOR)
@@ -368,6 +369,25 @@ class UnifiedOCRApp:
         tk.Entry(db_row,textvariable=self.item_name_var,width=18,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=5)
         self.db_status_lbl = tk.Label(db_row,text="",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT)
         self.db_status_lbl.grid(row=0,column=6,padx=(12,0))
+
+        # --- 品項屬性顯示區 (Phase 11: 單擊表格列即顯示該品項屬性 + 近日進貨) ---
+        self.item_attr_frame = tk.Frame(right, bg=BG_COLOR)
+        self.item_attr_frame.pack(fill='x', pady=(6, 0))
+        self.attr_name_lbl = tk.Label(self.item_attr_frame, text="品項屬性：",
+                                       fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT)
+        self.attr_name_lbl.grid(row=0, column=0, sticky='w', padx=(0, 6))
+        self.attr_cat_lbl = tk.Label(self.item_attr_frame, text="分類：-",
+                                      fg='#aaaaaa', bg=BG_COLOR, font=SMALL_FONT)
+        self.attr_cat_lbl.grid(row=0, column=1, sticky='w', padx=(0, 6))
+        self.attr_shelf_lbl = tk.Label(self.item_attr_frame, text="保存天數：-",
+                                        fg='#aaaaaa', bg=BG_COLOR, font=SMALL_FONT)
+        self.attr_shelf_lbl.grid(row=0, column=2, sticky='w', padx=(0, 6))
+        self.attr_loss_lbl = tk.Label(self.item_attr_frame, text="損耗率：-",
+                                       fg='#aaaaaa', bg=BG_COLOR, font=SMALL_FONT)
+        self.attr_loss_lbl.grid(row=0, column=3, sticky='w', padx=(0, 6))
+        self.attr_recent_lbl = tk.Label(self.item_attr_frame, text="近日進貨：-",
+                                         fg='#00ccff', bg=BG_COLOR, font=SMALL_FONT)
+        self.attr_recent_lbl.grid(row=0, column=4, sticky='w', padx=(0, 6))
 
         # --- Save button ---
         save_frame = tk.Frame(right, bg=BG_COLOR)
