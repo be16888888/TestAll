@@ -994,6 +994,51 @@ class UnifiedOCRApp:
             self._edit_row_id = None
             self._edit_col_idx = None
 
+    def _auto_fill_date_from_ocr(self, after_text, headers):
+        """從 OCR 結果自動帶入「表格日期」(未回存前)。
+        支援：民國年 115/7/22、115.7.22；西元 2026-07-22、2026/7/22。
+        來源優先序：下方文字 > 表格日期欄。使用者手動修改後不會被覆蓋(僅在此載入時帶入)。
+        """
+        import re
+        text_sources = list(after_text) if after_text else []
+        # 也掃描表格內含「日期」的欄位第一列值
+        try:
+            for ci, h in enumerate(headers):
+                if '日期' in str(h) or 'date' in str(h).lower():
+                    for rid in self.tree.get_children():
+                        vs = self.tree.item(rid, 'values')
+                        if ci < len(vs) and str(vs[ci]).strip():
+                            text_sources.append(str(vs[ci]))
+                            break
+        except Exception:
+            pass
+
+        for txt in text_sources:
+            iso = self._parse_date_to_iso(txt)
+            if iso:
+                self.biz_date_var.set(iso)
+                self.log(f"已自動帶入表格日期：{iso}")
+                return
+
+    @staticmethod
+    def _parse_date_to_iso(text: str) -> str | None:
+        """解析文字中的日期為 ISO (YYYY-MM-DD)。支援民國/西元年。"""
+        import re
+        s = str(text)
+        # 西元：2026-07-22 / 2026/7/22 / 2026.7.22
+        m = re.search(r'(19|20)(\d{2})[./\-](\d{1,2})[./\-](\d{1,2})', s)
+        if m:
+            y = int(m.group(1) + m.group(2)); mo = int(m.group(3)); d = int(m.group(4))
+            if 1 <= mo <= 12 and 1 <= d <= 31:
+                return f"{y:04d}-{mo:02d}-{d:02d}"
+        # 民國：115/7/22 / 115.7.22 (民國年 1~199)
+        m = re.search(r'(?<!\d)(\d{2,3})[./\-](\d{1,2})[./\-](\d{1,2})', s)
+        if m:
+            roc = int(m.group(1)); mo = int(m.group(2)); d = int(m.group(3))
+            if 1 <= roc <= 199 and 1 <= mo <= 12 and 1 <= d <= 31:
+                return f"{roc + 1911:04d}-{mo:02d}-{d:02d}"
+        return None
+
     def _write_after_text_to_doc(self, doc, table):
         """將 UI「表格下方文字」(含日期/下收手寫字) 寫回 Word 表格後的段落。
         策略：以編輯後文字行取代表格後既有的非空段落；多出的行則新增段落。
