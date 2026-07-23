@@ -992,6 +992,36 @@ class UnifiedOCRApp:
             self._edit_row_id = None
             self._edit_col_idx = None
 
+    def _write_after_text_to_doc(self, doc, table):
+        """將 UI「表格下方文字」(含日期/下收手寫字) 寫回 Word 表格後的段落。
+        策略：以編輯後文字行取代表格後既有的非空段落；多出的行則新增段落。
+        「（無）」佔位字串視為空、不寫回。
+        """
+        edited = self.after_table_text.get('1.0', tk.END).rstrip('\n')
+        new_lines = [ln for ln in edited.split('\n')] if edited and edited != '（無）' else []
+
+        # 收集表格後的段落元素 (p)
+        table_el = table._element
+        after_paras = []
+        found = False
+        for el in doc.element.body:
+            if el is table_el:
+                found = True
+                continue
+            if found and el.tag.endswith('}p'):
+                after_paras.append(el)
+
+        from docx.text.paragraph import Paragraph
+        # 逐行覆寫既有段落
+        for i, line in enumerate(new_lines):
+            if i < len(after_paras):
+                Paragraph(after_paras[i], doc).text = line
+            else:
+                doc.add_paragraph(line)
+        # 若編輯後行數變少，將多餘的舊段落清空
+        for j in range(len(new_lines), len(after_paras)):
+            Paragraph(after_paras[j], doc).text = ''
+
     def _save_treeview_to_docx(self):
         """儲存 Treeview 資料回 Word → 保留表格後文字 → 靜默二次確認"""
         if self._edit_entry:
