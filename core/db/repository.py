@@ -321,6 +321,8 @@ class SQLiteReviewRepository:
     
     def __init__(self, db_path: Path = DB_PATH):
         self.db_path = db_path
+        # Phase 9: 確保 schema 含多品項欄位 (冪等，舊 DB 自動補欄)
+        _migrate_multi_item_columns(self.db_path)
     
     # --- Internal helpers ---
     def _row_to_canonical(self, row: sqlite3.Row) -> CanonicalItem:
