@@ -1069,12 +1069,18 @@ class UnifiedOCRApp:
 
     @staticmethod
     def _parse_library_from_text(text: str) -> str | None:
-        """從文字擷取庫別名稱。優先含「庫」或「倉」的片段 (如 4-1庫 / A倉 / 凍庫)。"""
+        """從文字擷取庫別名稱。優先取括號內含「庫/倉」的內容 (如 (4-2庫) -> 4-2庫)。
+        若無括號則退回整行含 庫/倉 的片段。
+        """
         import re
         s = str(text).strip()
         if not s:
             return None
-        # 直接含 庫/倉 字 -> 整行視為庫別 (去除多餘空白)
+        # 優先：括號內含 庫/倉 (如 (4-2庫) / (A倉))
+        m = re.search(r'[（(]([^（）()]*[庫倉][^（）()]*)[）)]', s)
+        if m:
+            return re.sub(r'\s+', '', m.group(1))
+        # 退回：整行含 庫/倉
         if '庫' in s or '倉' in s:
             return re.sub(r'\s+', '', s)
         return None
