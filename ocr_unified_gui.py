@@ -343,15 +343,9 @@ class UnifiedOCRApp:
         self.biz_date_var = tk.StringVar(value=time.strftime("%Y-%m-%d"))
         tk.Entry(db_row,textvariable=self.biz_date_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=1,padx=(0,12))
         tk.Label(db_row,text="庫別:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=2,sticky='w',padx=(0,4))
-        # 庫別：顯示中文，實際值存英文 (資料庫 libraries 表與 inventory_service 依賴 inbound/outbound)
-        self.lib_var = tk.StringVar(value="inbound")          # 實際寫入 DB 的值
-        self._lib_display_to_value = {"進貨": "inbound", "出貨": "outbound", "A倉": "A倉", "B倉": "B倉"}
-        self._lib_value_to_display = {v: k for k, v in self._lib_display_to_value.items()}
-        self.lib_display_var = tk.StringVar(value="進貨")      # 下拉顯示的中文
-        def _on_lib_changed(*_):
-            self.lib_var.set(self._lib_display_to_value.get(self.lib_display_var.get(), "inbound"))
-        self.lib_display_var.trace_add("write", _on_lib_changed)
-        ttk.Combobox(db_row,textvariable=self.lib_display_var,values=["進貨","出貨","A倉","B倉"],state='readonly',width=10,font=SMALL_FONT).grid(row=0,column=3,padx=(0,12))
+        # 庫別：顯示 OCR 辨識出的文字 (如 4-1庫)，可手動編輯；入庫前自動 upsert 進 libraries 表 (FK 相容)
+        self.lib_var = tk.StringVar(value="")
+        tk.Entry(db_row,textvariable=self.lib_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=3,padx=(0,12))
         tk.Label(db_row,text="品項:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=4,sticky='w',padx=(0,4))
         self.item_name_var = tk.StringVar()
         tk.Entry(db_row,textvariable=self.item_name_var,width=18,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=5)
