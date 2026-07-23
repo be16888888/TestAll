@@ -204,6 +204,7 @@ class OCRReviewService:
         closing_qty: float = 0.0,
         unit_price: str | None = None,
         loss_qty: float = 0.0,
+        skip_dup_check: bool = False,
     ) -> ReviewResult:
         """
         核心流程：
