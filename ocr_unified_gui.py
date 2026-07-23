@@ -1233,14 +1233,15 @@ class UnifiedOCRApp:
         box.bind("<Configure>",lambda e:cvs.configure(scrollregion=cvs.bbox("all")))
         cvs.create_window((0,0),window=box,anchor='nw'); cvs.configure(yscrollcommand=sb.set)
         items = self._ocr_service.repo.get_all_canonical_items(active_only=False)
-        for ci in items:
+        # 使用 grid 讓各欄(品項/狀態/分類/屬性按鈕)垂直對齊
+        for r, ci in enumerate(items):
             f = tk.Frame(box,bg=BG_COLOR)
-            tk.Label(f,text=ci.canonical_name,fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16).pack(side='left',padx=4)
+            tk.Label(f,text=ci.canonical_name,fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16,anchor='w').grid(row=0,column=0,padx=4,sticky='w')
             status = "✓" if ci.is_active else "✗"
-            tk.Label(f,text=status,fg='#00cc00' if ci.is_active else '#ff4444',bg=BG_COLOR,font=SMALL_FONT).pack(side='left',padx=4)
-            tk.Label(f,text=f"{ci.category or ''}",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT).pack(side='left',padx=4)
+            tk.Label(f,text=status,fg='#00cc00' if ci.is_active else '#ff4444',bg=BG_COLOR,font=SMALL_FONT,width=3).grid(row=0,column=1,padx=4)
+            tk.Label(f,text=f"{ci.category or ''}",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT,width=8,anchor='w').grid(row=0,column=2,padx=4,sticky='w')
             tk.Button(f,text="屬性",command=lambda n=ci.canonical_name:self._show_item_attrs(n),
-                      bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT).pack(side='right',padx=4)
+                      bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT,width=6).grid(row=0,column=3,padx=4)
             f.pack(anchor='w',padx=8,pady=2)
         cvs.pack(side='left',fill='both',expand=True,padx=8,pady=8)
         sb.pack(side='right',fill='y')
