@@ -1298,9 +1298,9 @@ class UnifiedOCRApp:
                 self.log(f"入庫成功 {item_name} ({biz}/{lib})")
                 if r.alerts:
                     self._show_alerts(r.alerts)
-        else:
-            self.db_status_lbl.config(text=f"❌ {r.errors[0][:30]}", fg='red')
-            self.log(f"入庫失敗 {r.errors}")
+            else:
+                self.db_status_lbl.config(text=f"❌ {r.errors[0][:30]}", fg='red')
+                self.log(f"入庫失敗 {r.errors}")
 
     def _parse_quantity_from_tree(self) -> float:
         try:
@@ -1316,6 +1316,15 @@ class UnifiedOCRApp:
                     return total
         except: pass
         return 0.0
+
+    def _row_to_markdown(self, vals, headers) -> str:
+        """Phase 9: 將單列值轉為 markdown 表格文字（含表頭）。"""
+        lines = []
+        if headers:
+            lines.append("|" + "|".join(str(h) for h in headers) + "|")
+            lines.append("|" + "|".join("---" for _ in headers) + "|")
+        lines.append("|" + "|".join(str(v).replace('\n', ' ') for v in vals) + "|")
+        return "\n".join(lines)
 
     def _tree_to_markdown(self) -> str:
         lines = []
