@@ -1327,6 +1327,10 @@ class UnifiedOCRApp:
         from core.db.repository import compute_image_hash
 
         biz = self.biz_date_var.get().strip()
+        # 表格日期欄顯示民國格式 (115-07-17)，入庫前轉西元 ISO (A 方案: DB 存西元)
+        biz_iso = self._normalize_date_to_iso(biz)
+        if biz_iso:
+            biz = biz_iso
         lib = self.lib_var.get().strip()
         if not lib:
             self.db_status_lbl.config(text="⚠️ 庫別為空", fg='orange')
