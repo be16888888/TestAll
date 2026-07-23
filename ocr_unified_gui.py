@@ -31,7 +31,7 @@ from image_utils import convert_to_jpeg
 # ---------------------------
 _PROJECT_DIR = Path(__file__).resolve().parent
 _API_KEY_FILE = str(_PROJECT_DIR / "WebOcrAPI.json")
-__HASH_DB_PATH = str(_PROJECT_DIR / "image_hashes.json")
+_HASH_DB_PATH = str(_PROJECT_DIR / "image_hashes.json")
 # ---------------------------
 FG_COLOR = 'white'
 BG_COLOR = 'black'
