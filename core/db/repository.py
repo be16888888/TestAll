@@ -364,7 +364,13 @@ class SQLiteReviewRepository:
             is_verified=row['is_verified'],
             notes=row['notes'],
             created_at=row['created_at'],
-            updated_at=row['updated_at']
+            updated_at=row['updated_at'],
+            prev_stock=row['prev_stock'] if 'prev_stock' in row.keys() else 0.0,
+            outbound_qty=row['outbound_qty'] if 'outbound_qty' in row.keys() else 0.0,
+            inbound_qty=row['inbound_qty'] if 'inbound_qty' in row.keys() else 0.0,
+            closing_qty=row['closing_qty'] if 'closing_qty' in row.keys() else 0.0,
+            unit_price=row['unit_price'] if 'unit_price' in row.keys() else None,
+            loss_qty=row['loss_qty'] if 'loss_qty' in row.keys() else 0.0,
         )
     
     def _row_to_daily_inv(self, row: sqlite3.Row) -> DailyInventory:
