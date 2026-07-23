@@ -1249,8 +1249,18 @@ class UnifiedOCRApp:
 
     def _show_item_attrs(self, name):
         """Phase 8: 單品項屬性編輯"""
-        win = tk.Toplevel(self.root); win.title(f"{name} 的屬性"); win.geometry("540x360"); win.configure(bg=BG_COLOR)
-        tk.Label(win,text=f"品项: {name}",fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
+        win = tk.Toplevel(self.root); win.title(f"{name} 的屬性"); win.geometry("540x400"); win.configure(bg=BG_COLOR)
+        tk.Label(win,text=f"品項: {name}",fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
+
+        # 分類下拉 (存入 canonical_items.category)
+        cur_ci = next((c for c in self._ocr_service.repo.get_all_canonical_items(active_only=False)
+                       if c.canonical_name == name), None)
+        cat_frame = tk.Frame(win,bg=BG_COLOR); cat_frame.pack(fill='x',padx=14,pady=2)
+        tk.Label(cat_frame,text="分類:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16,anchor='w').pack(side='left')
+        cat_var = tk.StringVar(value=(cur_ci.category if cur_ci and cur_ci.category else ''))
+        ttk.Combobox(cat_frame,textvariable=cat_var,values=["水果","蔬菜","肉類","其他"],
+                     state='readonly',width=18,font=SMALL_FONT).pack(side='left')
+
         attrs = self._ocr_service.get_item_attributes(name)
         entries = {}
         # 屬性 key (資料庫欄位) -> 中文標籤
@@ -1262,11 +1272,14 @@ class UnifiedOCRApp:
         }
         for key in ['shelf_life_days','normal_loss_pct','expiry_date','unit']:
             f = tk.Frame(win,bg=BG_COLOR); f.pack(fill='x',padx=14,pady=2)
-            tk.Label(f,text=f"{attr_labels[key]}:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16).pack(side='left')
+            tk.Label(f,text=f"{attr_labels[key]}:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16,anchor='w').pack(side='left')
             val = tk.StringVar(value=attrs.get(key,''))
             tk.Entry(f,textvariable=val,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT,width=20).pack(side='left')
             entries[key] = val
         def save():
+            # 儲存分類
+            if cat_var.get().strip():
+                self._ocr_service.repo.upsert_canonical_item(name, category=cat_var.get().strip())
             for k,v in entries.items():
                 if v.get().strip():
                     self._ocr_service.set_item_attribute(name,k,v.get().strip())
