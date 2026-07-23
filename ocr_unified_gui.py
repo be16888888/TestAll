@@ -1128,6 +1128,34 @@ class UnifiedOCRApp:
         for j in range(len(new_lines), len(after_paras)):
             Paragraph(after_paras[j], doc).text = ''
 
+    def _write_before_text_to_doc(self, doc, table):
+        """將 UI「表格上方文字」(含庫別/日期標頭) 寫回 Word 表格前的段落。
+        邏輯同 _write_after_text_to_doc，但作用於表格前段落。
+        """
+        edited = self.before_table_text.get('1.0', tk.END).rstrip('\n')
+        new_lines = [ln for ln in edited.split('\n')] if edited and edited != '（無）' else []
+
+        # 收集表格前的段落元素 (p)
+        table_el = table._element
+        before_paras = []
+        found = False
+        for el in doc.element.body:
+            if el is table_el:
+                found = True
+                break
+            if el.tag.endswith('}p'):
+                before_paras.append(el)
+
+        from docx.text.paragraph import Paragraph
+        for i, line in enumerate(new_lines):
+            if i < len(before_paras):
+                Paragraph(before_paras[i], doc).text = line
+            else:
+                # 表格前新增段落 (插在文件最前)
+                doc.element.body.insert(0, doc.add_paragraph(line)._element)
+        for j in range(len(new_lines), len(before_paras)):
+            Paragraph(before_paras[j], doc).text = ''
+
     def _save_treeview_to_docx(self):
         """儲存 Treeview 資料回 Word → 保留表格後文字 → 靜默二次確認"""
         if self._edit_entry:
