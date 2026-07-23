@@ -1219,6 +1219,14 @@ class UnifiedOCRApp:
 
         biz = self.biz_date_var.get().strip()
         lib = self.lib_var.get().strip()
+        if not lib:
+            self.db_status_lbl.config(text="⚠️ 庫別為空", fg='orange')
+            return
+        # 庫別為 OCR 辨識文字 (如 4-1庫)，入庫前確保存在 libraries 表 (FK 相容)
+        try:
+            self._ocr_service.repo.ensure_library(lib, lib_type='storage')
+        except Exception as e:
+            self.log(f"庫別寫入 libraries 失敗：{e}")
         wp = self._current_docx_path or ""
         img_path = self.image_paths[self.current_image_idx] if self.current_image_idx < len(self.image_paths) else ""
         img_hash = compute_image_hash(Path(img_path)) if img_path else "no_image"
