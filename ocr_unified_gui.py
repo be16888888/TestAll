@@ -311,10 +311,16 @@ class UnifiedOCRApp:
         self.after_table_label.pack(anchor='w', pady=(6, 2))
         self.after_table_text = scrolledtext.ScrolledText(
             self.after_table_frame, height=4, bg=LOG_BG, fg=LOG_FG,
-            font=SMALL_FONT, state='disabled', wrap='word'
+            font=SMALL_FONT, state='normal', wrap='word'
         )
         self.after_table_text.pack(fill='x')
         self.after_table_frame.pack(fill='x', pady=(4, 0))
+        # 下方文字被編輯時標記 dirty (含日期/下收手寫字)，確保回存時一併寫回
+        def _on_after_text_modified(event):
+            if self.after_table_text.edit_modified():
+                self._dirty = True
+                self.after_table_text.edit_modified(False)
+        self.after_table_text.bind('<<Modified>>', _on_after_text_modified)
 
         # Style for dark theme
         style = ttk.Style()
