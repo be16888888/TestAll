@@ -284,8 +284,6 @@ class UnifiedOCRApp:
         # --- Treeview table ---
         table_frame = tk.Frame(right, bg=BG_COLOR)
         table_frame.pack(fill='both', expand=True)
-
-        # Vertical scrollbar
         vsb = ttk.Scrollbar(table_frame, orient='vertical')
         vsb.pack(side='right', fill='y')
         # Horizontal scrollbar
