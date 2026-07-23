@@ -163,11 +163,23 @@ class InventoryService:
             (review_date, library, item_name))
         return float(dict(rs[0]).get("SUM(quantity)", 0) or 0) if rs else 0.0
 
-    def get_recent_inbound(self, before_date: str | None = None) -> tuple[str | None, dict[str, float]]:
-        """近日進貨：找最近一日有進貨(inbound)的日期，回傳 (日期, {品項: 進貨量})。
-        - before_date 為 None 時取全體最近一日；否則取 <= before_date 的最近一日。
-        - 僅回傳該日實際有進貨的品項；沒進貨的品項不列入(呼叫端顯示為空)。
+    def get_recent_inbound(self, before_date: str | None = None,
+                           same_day: bool = False) -> tuple[str | None, dict[str, float]]:
+        """近日進貨：回傳 (日期, {品項: 進貨量})。
+        - same_day=False (預設)：找最近一日有進貨(inbound)的日期。
+            before_date 為 None 時取全體最近一日；否則取 <= before_date 的最近一日。
+        - same_day=True：取 before_date「當日」所有進貨(inbound)品項 (跨庫別/跨表格彙總)。
+            例：0713 有三張表格 -> 顯示 0713 三張表格所有有進貨品項的進貨量。
+        - 僅回傳實際有進貨的品項；沒進貨的品項不列入(呼叫端顯示為空)。
         """
+        if same_day and before_date:
+            recent_date = before_date
+            rows = self.repo.execute(
+                "SELECT item_name, SUM(quantity) AS q FROM ocr_reviewed_items "
+                "WHERE library='inbound' AND review_date = ? GROUP BY item_name",
+                (recent_date,))
+            result = {dict(r)["item_name"]: float(dict(r)["q"] or 0) for r in rows}
+            return (recent_date if result else None), result
         if before_date:
             rs = self.repo.execute(
                 "SELECT MAX(review_date) AS d FROM ocr_reviewed_items "
