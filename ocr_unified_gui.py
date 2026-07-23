@@ -1245,9 +1245,16 @@ class UnifiedOCRApp:
         tk.Label(win,text=f"品项: {name}",fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
         attrs = self._ocr_service.get_item_attributes(name)
         entries = {}
+        # 屬性 key (資料庫欄位) -> 中文標籤
+        attr_labels = {
+            'shelf_life_days': '保存天數',
+            'normal_loss_pct': '正常損耗率(%)',
+            'expiry_date': '到期日(YYYY-MM-DD)',
+            'unit': '單位',
+        }
         for key in ['shelf_life_days','normal_loss_pct','expiry_date','unit']:
             f = tk.Frame(win,bg=BG_COLOR); f.pack(fill='x',padx=14,pady=2)
-            tk.Label(f,text=f"{key}:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16).pack(side='left')
+            tk.Label(f,text=f"{attr_labels[key]}:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16).pack(side='left')
             val = tk.StringVar(value=attrs.get(key,''))
             tk.Entry(f,textvariable=val,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT,width=20).pack(side='left')
             entries[key] = val
