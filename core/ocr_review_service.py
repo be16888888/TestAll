@@ -329,9 +329,9 @@ class OCRReviewService:
         """
         results: list[ReviewResult] = []
         for idx, r in enumerate(rows):
-            # 多品項日結表: 同一張圖多列，首列做圖片去重，其餘列跳過
-            # (避免同一來源圖被誤判為重複而擋掉後續品項列)
-            skip_dup = idx > 0
+            # 多品項日結表: 同一張圖多列 = 同一來源，整批跳過圖片去重
+            # (避免首列自身去重擋掉重跑 UPSERT；也避免第 2 列起被同一 hash 擋)
+            skip_dup = True
             # 補足多品項欄位預設值
             res = self.save_reviewed_item(
                 review_date=r["review_date"],
