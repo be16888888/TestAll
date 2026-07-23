@@ -1198,10 +1198,13 @@ class UnifiedOCRApp:
             return
 
         win = tk.Toplevel(self.root)
-        win.title(f"庫存概览 {biz}/{lib}"); win.geometry("720x540"); win.configure(bg=BG_COLOR)
+        win.title(f"庫存概览 {biz}/{lib}"); win.geometry("760x540"); win.configure(bg=BG_COLOR)
         abnormal = [d for d in diffs.values() if d.is_abnormal]
         normal = [d for d in diffs.values() if not d.is_abnormal]
-        lbl = tk.Label(win,text=f"共 {len(diffs)} 品項（🔴異常 {len(abnormal)} / ⚪正常 {len(normal)}）",
+        # 近日進貨：最近一日有進貨的品項數量 (僅該日有進貨者顯示，其餘留空)
+        recent_date, recent_inbound = self._inv_service.get_recent_inbound(before_date=biz)
+        recent_hint = f"（近日進貨基準日：{recent_date}）" if recent_date else "（無進貨紀錄）"
+        lbl = tk.Label(win,text=f"共 {len(diffs)} 品項（🔴異常 {len(abnormal)} / ⚪正常 {len(normal)}）{recent_hint}",
                        fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
         cvs = tk.Canvas(win,bg=BG_COLOR,highlightthickness=0)
         sb = ttk.Scrollbar(win,orient='vertical',command=cvs.yview)
@@ -1209,13 +1212,15 @@ class UnifiedOCRApp:
         box.bind("<Configure>",lambda e:cvs.configure(scrollregion=cvs.bbox("all")))
         cvs.create_window((0,0),window=box,anchor='nw'); cvs.configure(yscrollcommand=sb.set)
         hdr = tk.Frame(box,bg=BG_COLOR)
-        for i,txt in enumerate(["品項","昨日進貨","理論","實際","損耗量","損耗率"]):
+        for i,txt in enumerate(["品項","近日進貨","理論","實際","損耗量","損耗率"]):
             tk.Label(hdr,text=txt,fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=10).grid(row=0,column=i,padx=2)
         hdr.pack(anchor='w',padx=8,pady=4)
         for color,grp in [('#ff4444',abnormal),('#cccccc',normal)]:
             for d in grp:
                 rw = tk.Frame(box,bg=BG_COLOR)
-                for j,val in enumerate([d.item_name,f"{d.inbound_qty:.1f}",f"{d.expected_qty:.1f}",f"{d.actual_qty:.1f}",f"{d.loss_qty:+.2f}",f"{d.loss_pct:.1f}%"]):
+                # 近日進貨：該品項最近一日有進貨才顯示數量，否則留空
+                recent_qty = f"{recent_inbound[d.item_name]:.1f}" if d.item_name in recent_inbound else ""
+                for j,val in enumerate([d.item_name,recent_qty,f"{d.expected_qty:.1f}",f"{d.actual_qty:.1f}",f"{d.loss_qty:+.2f}",f"{d.loss_pct:.1f}%"]):
                     tk.Label(rw,text=val,fg=color,bg=BG_COLOR,font=SMALL_FONT,width=10).grid(row=0,column=j,padx=2)
                 rw.pack(anchor='w',padx=8)
         cvs.pack(side='left',fill='both',expand=True,padx=8,pady=8)
