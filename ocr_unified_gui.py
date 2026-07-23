@@ -1163,6 +1163,8 @@ class UnifiedOCRApp:
 
             # 保留/更新表格後文字（含日期、下收手寫字）
             self._write_after_text_to_doc(doc, table)
+            # 保留/更新表格前文字（含庫別、日期標頭，供修改後寫回）
+            self._write_before_text_to_doc(doc, table)
             doc.save(self._current_docx_path)
             self._dirty = False
             self.log(f"已儲存回 Word：{os.path.basename(self._current_docx_path)}")
