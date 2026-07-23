@@ -98,7 +98,7 @@ for l in libs:
     d = inv.calculate_daily(biz, l, items=["高麗菜", "包心白", "山東白"])
     diffs.extend(d.values())
 
-check("BugB: 彙總品項數=3", len(diffs) == 3, f"n={len(diffs)}")
+check("BugB: 彙總品項數=6 (3品項×2庫別)", len(diffs) == 6, f"n={len(diffs)}")
 check("BugB: 每筆 diff 含 library 欄位", all(hasattr(d, "library") and d.library for d in diffs),
       f"libs={[d.library for d in diffs]}")
 check("BugB: 不再因庫別為空而跳過", len(diffs) > 0, f"diffs={len(diffs)}")
