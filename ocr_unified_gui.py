@@ -1634,31 +1634,31 @@ class UnifiedOCRApp:
             biz = biz_iso
         lib = self.lib_var.get().strip()
 
-        # 庫別為空時：預覽該日期「所有庫別」的品項（並於表格加入「庫別」欄位），
-        # 不再因庫別為空而直接拒絕。資料來源優先 ocr_reviewed_items，其次 daily_inventory。
-        if lib:
-            libs = [lib]
-        else:
+        # 庫存預覽：永遠顯示該日期「所有庫別」的庫存 (不論本表格庫別是否填入)，
+        # 並於表格加入「庫別」欄位。資料來源優先 ocr_reviewed_items，其次 daily_inventory。
+        try:
+            rows = self._inv_service.repo.execute(
+                "SELECT DISTINCT library FROM ocr_reviewed_items WHERE review_date = ?", (biz,))
+            libs = [dict(r)["library"] for r in rows if dict(r).get("library")]
+        except Exception:
+            libs = []
+        if not libs:
             try:
                 rows = self._inv_service.repo.execute(
-                    "SELECT DISTINCT library FROM ocr_reviewed_items WHERE review_date = ?", (biz,))
+                    "SELECT DISTINCT library FROM daily_inventory WHERE snapshot_date = ?", (biz,))
                 libs = [dict(r)["library"] for r in rows if dict(r).get("library")]
             except Exception:
                 libs = []
-            if not libs:
-                try:
-                    rows = self._inv_service.repo.execute(
-                        "SELECT DISTINCT library FROM daily_inventory WHERE snapshot_date = ?", (biz,))
-                    libs = [dict(r)["library"] for r in rows if dict(r).get("library")]
-                except Exception:
-                    libs = []
-            if not libs:
-                # 該日期無任何庫別紀錄：退回全庫別，確保預覽仍能開啟
-                try:
-                    rows = self._inv_service.repo.execute("SELECT DISTINCT library FROM ocr_reviewed_items")
-                    libs = [dict(r)["library"] for r in rows if dict(r).get("library")]
-                except Exception:
-                    libs = []
+        if not libs:
+            # 該日期無任何庫別紀錄：退回全庫別，確保預覽仍能開啟
+            try:
+                rows = self._inv_service.repo.execute("SELECT DISTINCT library FROM ocr_reviewed_items")
+                libs = [dict(r)["library"] for r in rows if dict(r).get("library")]
+            except Exception:
+                libs = []
+        if lib and lib not in libs:
+            # 若本表格有指定庫別但未出現在當日紀錄，仍一併納入顯示
+            libs.append(lib)
 
         # 確保各庫別存在 libraries 表 (FK 相容)，並計算每日庫存差異
         diffs = []
