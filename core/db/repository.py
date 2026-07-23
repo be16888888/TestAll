@@ -202,11 +202,32 @@ def init_db(db_path: Path = DB_PATH) -> None:
         sql = schema_path.read_text(encoding='utf-8')
         conn.executescript(sql)
     
+    # Phase 9 migration: 多品項欄位 (向後相容，舊 DB 自動補欄)
+    _migrate_multi_item_columns(db_path)
+    
     # 確保 schema 版本
     with get_conn(db_path) as conn:
         ver = conn.execute("PRAGMA user_version").fetchone()[0]
         if ver == 0:
             conn.execute("PRAGMA user_version = 1")
+
+
+def _migrate_multi_item_columns(db_path: Path) -> None:
+    """對 ocr_reviewed_items 補上 Phase 9 多品項欄位（若尚不存在）。"""
+    new_cols = [
+        ("prev_stock",   "REAL NOT NULL DEFAULT 0"),
+        ("outbound_qty", "REAL NOT NULL DEFAULT 0"),
+        ("inbound_qty",  "REAL NOT NULL DEFAULT 0"),
+        ("closing_qty",  "REAL NOT NULL DEFAULT 0"),
+        ("unit_price",   "TEXT"),
+        ("loss_qty",     "REAL NOT NULL DEFAULT 0"),
+    ]
+    with get_conn(db_path) as conn:
+        existing = {r[1] for r in conn.execute("PRAGMA table_info(ocr_reviewed_items)")}
+        for col, ddl in new_cols:
+            if col not in existing:
+                conn.execute(f"ALTER TABLE ocr_reviewed_items ADD COLUMN {col} {ddl}")
+
 
 
 # ============================================================
