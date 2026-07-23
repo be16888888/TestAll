@@ -1610,6 +1610,14 @@ class UnifiedOCRApp:
         if biz_iso:
             biz = biz_iso
         lib = self.lib_var.get().strip()
+        if not lib:
+            self.log("⚠️ 庫別為空，無法預覽庫存")
+            return
+        # 庫別為 OCR 辨識文字 (如 4-1庫)，需先確保存在 libraries 表 (FK 相容)
+        try:
+            self._ocr_service.repo.ensure_library(lib, lib_type='storage')
+        except Exception as e:
+            self.log(f"庫別寫入 libraries 失敗：{e}")
         try:
             diffs = self._inv_service.calculate_daily(biz, lib)
         except Exception as e:
