@@ -45,6 +45,7 @@ NORMAL_FONT = ('Arial', 14)
 SMALL_FONT = ('Arial', 12)
 WORD_FILENAME_FONT = ('Arial', 16)  # Word 檔名字體 16（只顯示檔名）
 MONO_FONT = ('Consolas', 16)
+BOX_FONT = ('Arial', 16)  # 表格上方/下方文字框字體 16（供手改日期/庫別）
 
 OUTPUT_DIR = r"/mnt/e/DiskCUse/HFDownloads"
 
