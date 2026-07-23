@@ -905,8 +905,9 @@ class UnifiedOCRApp:
             self._current_docx_path = docx_path
             self._dirty = False
             self.after_text_cache = after_text  # 保存以備回存
-            # 自動帶入日期：從下方文字/表格解析 (未回存前)。若使用者已手改，回存後以修改為準。
-            self._auto_fill_date_from_ocr(after_text, headers)
+            # 自動帶入：日期(表格上方優先) + 庫別(表格上方辨識文字，如 4-1庫)
+            # 未回存前自動帶入；使用者手動修改後以修改為準。
+            self._auto_fill_from_ocr(before_text, after_text, headers)
             self.log(f"已載入表格：{len(table.rows)-1} 列 × {len(headers)} 欄")
         except Exception as e:
             self.log(f"載入 Word 表格失敗：{e}")
