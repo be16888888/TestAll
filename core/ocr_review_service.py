@@ -328,7 +328,10 @@ class OCRReviewService:
         回傳每列的 ReviewResult。
         """
         results: list[ReviewResult] = []
-        for r in rows:
+        for idx, r in enumerate(rows):
+            # 多品項日結表: 同一張圖多列，首列做圖片去重，其餘列跳過
+            # (避免同一來源圖被誤判為重複而擋掉後續品項列)
+            skip_dup = idx > 0
             # 補足多品項欄位預設值
             res = self.save_reviewed_item(
                 review_date=r["review_date"],
@@ -348,6 +351,7 @@ class OCRReviewService:
                 closing_qty=float(r.get("closing_qty", 0) or 0),
                 unit_price=r.get("unit_price") or None,
                 loss_qty=float(r.get("loss_qty", 0) or 0),
+                skip_dup_check=skip_dup,
             )
             results.append(res)
         return results
