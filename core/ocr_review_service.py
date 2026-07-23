@@ -269,6 +269,12 @@ class OCRReviewService:
             notes=notes,
             created_at="",
             updated_at=None,
+            prev_stock=prev_stock,
+            outbound_qty=outbound_qty,
+            inbound_qty=inbound_qty,
+            closing_qty=closing_qty,
+            unit_price=unit_price,
+            loss_qty=loss_qty,
         )
         item_id = self.repo.insert_reviewed_item(item)
         result.item_id = item_id
