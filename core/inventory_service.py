@@ -166,12 +166,23 @@ class InventoryService:
     def get_recent_inbound(self, before_date: str | None = None,
                            same_day: bool = False) -> tuple[str | None, dict[str, float]]:
         """近日進貨：回傳 (日期, {品項: 進貨量})。
-        - same_day=False (預設)：找最近一日有進貨(inbound)的日期。
-            before_date 為 None 時取全體最近一日；否則取 <= before_date 的最近一日。
-        - same_day=True：取「全資料庫最新有進貨量(inbound_qty>0)的那一天」，
-            不分庫別、不分表格，彙總該日所有有進貨的品項及其進貨量。
+        - same_day=False (預設)：找最近一日有進貨量(inbound_qty>0)的日期。
+            before_date 為 None 時取全資料庫最近一日；否則取 <= before_date 的最近一日。
+        - same_day=True：取指定日期的進貨品項 (不分庫別彙總)。
+            before_date 為 None 時取全資料庫最新有進貨的一天；
+            否則取 before_date「當日」所有有進貨的品項。
         - 僅回傳實際有進貨的品項；沒進貨的品項不列入(呼叫端顯示為空)。
+        - 進貨量以 inbound_qty 欄位為準（多品項日結表的進貨語意）。
         """
+        if same_day and before_date:
+            # 指定日期當日
+            recent_date = before_date
+            rows = self.repo.execute(
+                "SELECT item_name, SUM(inbound_qty) AS q FROM ocr_reviewed_items "
+                "WHERE inbound_qty > 0 AND review_date = ? GROUP BY item_name",
+                (recent_date,))
+            result = {dict(r)["item_name"]: float(dict(r)["q"] or 0) for r in rows}
+            return (recent_date if result else None), result
         if same_day:
             # 全資料庫最新有 inbound_qty > 0 的日期（不分庫別、不分表格）
             rows = self.repo.execute(
@@ -188,16 +199,16 @@ class InventoryService:
         if before_date:
             rs = self.repo.execute(
                 "SELECT MAX(review_date) AS d FROM ocr_reviewed_items "
-                "WHERE library='inbound' AND review_date <= ?", (before_date,))
+                "WHERE inbound_qty > 0 AND review_date <= ?", (before_date,))
         else:
             rs = self.repo.execute(
-                "SELECT MAX(review_date) AS d FROM ocr_reviewed_items WHERE library='inbound'")
+                "SELECT MAX(review_date) AS d FROM ocr_reviewed_items WHERE inbound_qty > 0")
         recent_date = dict(rs[0]).get("d") if rs else None
         if not recent_date:
             return None, {}
         rows = self.repo.execute(
-            "SELECT item_name, SUM(quantity) AS q FROM ocr_reviewed_items "
-            "WHERE library='inbound' AND review_date = ? GROUP BY item_name",
+            "SELECT item_name, SUM(inbound_qty) AS q FROM ocr_reviewed_items "
+            "WHERE inbound_qty > 0 AND review_date = ? GROUP BY item_name",
             (recent_date,))
         result = {dict(r)["item_name"]: float(dict(r)["q"] or 0) for r in rows}
         return recent_date, result

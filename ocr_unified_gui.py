@@ -219,7 +219,7 @@ class UnifiedOCRApp:
 
         tk.Button(
             bar, text="選擇圖片（可多選）", command=self.select_files,
-            bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=20, pady=8
+            bg=BTN_BG, fg=FG_COLOR, font=BOX_FONT, padx=20, pady=8
         ).pack(side='left', padx=10)
 
         # file list dropdown
@@ -233,8 +233,8 @@ class UnifiedOCRApp:
         self.file_combo.bind('<<ComboboxSelected>>', self._on_file_selected)
 
         tk.Button(
-            bar, text="開始辨識", command=self.start_process,
-            bg='#0066cc', fg=FG_COLOR, font=SMALL_FONT, padx=24, pady=8
+            bar, text="辨識", command=self.start_process,
+            bg='#0066cc', fg=FG_COLOR, font=BOX_FONT, padx=24, pady=8
         ).pack(side='left', padx=10)
 
         tk.Button(
@@ -308,10 +308,6 @@ class UnifiedOCRApp:
         # 註：原獨立檔名列 (path_bar / word_path_var) 已移除，
         # 辨識後檔名(標頭)現統一顯示於「表格上方文字」框 (見 _load_docx_to_treeview Phase 10.5)
         self.before_table_frame = tk.Frame(right, bg=BG_COLOR)
-        self.before_table_label = tk.Label(
-            self.before_table_frame, text="表格上方文字：", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT
-        )
-        self.before_table_label.pack(anchor='w', pady=(6, 2))
         self.before_table_text = scrolledtext.ScrolledText(
             self.before_table_frame, height=2, bg=LOG_BG, fg=LOG_FG,
             font=BOX_FONT, state='normal', wrap='word'
@@ -347,10 +343,6 @@ class UnifiedOCRApp:
 
         # 表格下方文字區域
         self.after_table_frame = tk.Frame(right, bg=BG_COLOR)
-        self.after_table_label = tk.Label(
-            self.after_table_frame, text="表格下方文字：", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT
-        )
-        self.after_table_label.pack(anchor='w', pady=(6, 2))
         self.after_table_text = scrolledtext.ScrolledText(
             self.after_table_frame, height=4, bg=LOG_BG, fg=LOG_FG,
             font=BOX_FONT, state='normal', wrap='word'
@@ -382,55 +374,34 @@ class UnifiedOCRApp:
         # --- 入庫資訊區 (Phase 3) ---
         db_row = tk.Frame(right, bg=BG_COLOR)
         db_row.pack(fill='x', pady=(8,0))
-        tk.Label(db_row,text="表格日期:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=0,sticky='w',padx=(0,4))
+        tk.Label(db_row,text="表格日期:",fg=FG_COLOR,bg=BG_COLOR,font=BOX_FONT).grid(row=0,column=0,sticky='w',padx=(0,4))
         self.biz_date_var = tk.StringVar(value=time.strftime("%Y-%m-%d"))
-        tk.Entry(db_row,textvariable=self.biz_date_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=1,padx=(0,12))
-        tk.Label(db_row,text="庫別:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=2,sticky='w',padx=(0,4))
+        tk.Entry(db_row,textvariable=self.biz_date_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=BOX_FONT).grid(row=0,column=1,padx=(0,12))
+        tk.Label(db_row,text="庫別:",fg=FG_COLOR,bg=BG_COLOR,font=BOX_FONT).grid(row=0,column=2,sticky='w',padx=(0,4))
         # 庫別：顯示 OCR 辨識出的文字 (如 4-1庫)，可手動編輯；入庫前自動 upsert 進 libraries 表 (FK 相容)
         self.lib_var = tk.StringVar(value="")
-        tk.Entry(db_row,textvariable=self.lib_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=3,padx=(0,12))
-        self.db_status_lbl = tk.Label(db_row,text="",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT)
+        tk.Entry(db_row,textvariable=self.lib_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=BOX_FONT).grid(row=0,column=3,padx=(0,12))
+        self.db_status_lbl = tk.Label(db_row,text="",fg='#aaaaaa',bg=BG_COLOR,font=BOX_FONT)
         self.db_status_lbl.grid(row=0,column=4,padx=(12,0))
 
-        # --- 品項屬性顯示區 (Phase 11: 單擊表格列即顯示該品項屬性 + 近日進貨) ---
-        self.item_attr_frame = tk.Frame(right, bg=BG_COLOR)
-        self.item_attr_frame.pack(fill='x', pady=(6, 0))
-        self.attr_name_lbl = tk.Label(self.item_attr_frame, text="品項屬性：",
-                                       fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT)
-        self.attr_name_lbl.grid(row=0, column=0, sticky='w', padx=(0, 6))
-        self.attr_cat_lbl = tk.Label(self.item_attr_frame, text="分類：-",
-                                      fg='#aaaaaa', bg=BG_COLOR, font=SMALL_FONT)
-        self.attr_cat_lbl.grid(row=0, column=1, sticky='w', padx=(0, 6))
-        self.attr_shelf_lbl = tk.Label(self.item_attr_frame, text="保存天數：-",
-                                        fg='#aaaaaa', bg=BG_COLOR, font=SMALL_FONT)
-        self.attr_shelf_lbl.grid(row=0, column=2, sticky='w', padx=(0, 6))
-        self.attr_loss_lbl = tk.Label(self.item_attr_frame, text="損耗率：-",
-                                       fg='#aaaaaa', bg=BG_COLOR, font=SMALL_FONT)
-        self.attr_loss_lbl.grid(row=0, column=3, sticky='w', padx=(0, 6))
-        self.attr_recent_lbl = tk.Label(self.item_attr_frame, text="近日進貨：-",
-                                         fg='#00ccff', bg=BG_COLOR, font=SMALL_FONT)
-        self.attr_recent_lbl.grid(row=0, column=4, sticky='w', padx=(0, 6))
-
-        # --- Save button ---
+        # --- Save button + Phase 6 buttons in same row ---
         save_frame = tk.Frame(right, bg=BG_COLOR)
         save_frame.pack(fill='x', pady=(8, 0))
+        # Phase 6: 庫存按鈕（左側）
+        tk.Button(save_frame, text="📊 庫存概覽", command=self._show_inventory_panel,
+                  bg=BTN_BG, fg=FG_COLOR, font=BOX_FONT, padx=12, pady=4).pack(side='left', padx=4)
+        tk.Button(save_frame, text="📋 品項管理", command=self._show_item_manager,
+                  bg=BTN_BG, fg=FG_COLOR, font=BOX_FONT, padx=12, pady=4).pack(side='left', padx=4)
+        tk.Button(save_frame, text="⚙️ 規則管理", command=self._show_rule_manager,
+                  bg=BTN_BG, fg=FG_COLOR, font=BOX_FONT, padx=12, pady=4).pack(side='left', padx=4)
+        # 回存WORD/入庫按鈕（右側）
         self.save_word_btn = tk.Button(
-            save_frame, text="💾 回存WORD檔 / 入資料庫",
+            save_frame, text="💾 回存WORD/入庫",
             command=self._save_and_archive,
-            bg='#cc6600', fg=FG_COLOR, font=DEFAULT_FONT, padx=24, pady=10,
+            bg='#cc6600', fg=FG_COLOR, font=DEFAULT_FONT, padx=12, pady=6,
             state='disabled'
         )
-        self.save_word_btn.pack(fill='x')
-
-        # Phase 6: 庫存按鈕
-        btn_row = tk.Frame(right, bg=BG_COLOR)
-        btn_row.pack(fill='x', pady=(4,0))
-        tk.Button(btn_row, text="📊 庫存概覽", command=self._show_inventory_panel,
-                  bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=16, pady=6).pack(side='left', padx=4)
-        tk.Button(btn_row, text="📋 品項管理", command=self._show_item_manager,
-                  bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=16, pady=6).pack(side='left', padx=4)
-        tk.Button(btn_row, text="⚙️ 規則管理", command=self._show_rule_manager,
-                  bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT, padx=16, pady=6).pack(side='left', padx=4)
+        self.save_word_btn.pack(side='right', padx=8)
 
         self._db_initialized = False
 
@@ -955,11 +926,9 @@ class UnifiedOCRApp:
             self.after_table_text.delete('1.0', tk.END)
             if after_text:
                 self.after_table_text.insert('1.0', '\n'.join(after_text))
-                self.after_table_label.pack()
                 self.after_table_frame.pack(fill='x', pady=(4, 0))
             else:
                 self.after_table_text.insert('1.0', '（無）')
-                self.after_table_label.pack()
                 self.after_table_frame.pack(fill='x', pady=(4, 0))
             self.after_table_text.config(state='normal')
 
@@ -968,11 +937,9 @@ class UnifiedOCRApp:
             self.before_table_text.delete('1.0', tk.END)
             if before_text:
                 self.before_table_text.insert('1.0', '\n'.join(before_text))
-                self.before_table_label.pack()
                 self.before_table_frame.pack(fill='x', pady=(4, 0))
             else:
                 self.before_table_text.insert('1.0', '（無）')
-                self.before_table_label.pack()
                 self.before_table_frame.pack(fill='x', pady=(4, 0))
             self.before_table_text.config(state='normal')
 
@@ -1018,35 +985,8 @@ class UnifiedOCRApp:
             self._ensure_db()
         if not getattr(self, '_ocr_service', None):
             return
-        # 基礎預設
-        self.attr_name_lbl.config(text=f"品項：{item_name}")
-        cat = ""
-        shelf = "-"
-        loss = "-"
-        try:
-            ci = next((c for c in self._ocr_service.repo.get_all_canonical_items(active_only=False)
-                       if c.canonical_name == item_name), None)
-            if ci:
-                cat = ci.category or "-"
-            attrs = self._ocr_service.get_item_attributes(item_name)
-            shelf = attrs.get('shelf_life_days') or "-"
-            loss = attrs.get('normal_loss_pct') or "-"
-        except Exception:
-            pass
-        self.attr_cat_lbl.config(text=f"分類：{cat}")
-        self.attr_shelf_lbl.config(text=f"保存天數：{shelf}")
-        self.attr_loss_lbl.config(text=f"損耗率：{loss}")
-
-        # 近日進貨：該品項最近一日有進貨量 (inbound_qty 欄，多品項日結表；回退 library='inbound')
-        recent = ""
-        try:
-            biz = self.biz_date_var.get().strip()
-            biz_iso = self._normalize_date_to_iso(biz) or biz
-            qty = self._get_item_recent_inbound(item_name, biz_iso)
-            recent = f"{qty:.1f}" if qty is not None else ""
-        except Exception:
-            pass
-        self.attr_recent_lbl.config(text=f"近日進貨：{recent}" if recent else "近日進貨：-")
+        # 基礎預設 - 此功能已移除，僅保留相容性
+        pass
 
     def _get_item_recent_inbound(self, item_name: str, before_date: str) -> float | None:
         """查該品項最近一日進貨量。優先 inbound_qty 欄(多品項日結表，辨識庫別)，回退 library='inbound'。"""
@@ -1680,11 +1620,11 @@ class UnifiedOCRApp:
 
         win = tk.Toplevel(self.root)
         title = f"庫存概览 {biz}（全部庫別）"
-        win.title(title); win.geometry("900x540"); win.configure(bg=BG_COLOR)
+        win.title(title); win.geometry("1200x540"); win.configure(bg=BG_COLOR)
         abnormal = [d for d in diffs if d.is_abnormal]
         normal = [d for d in diffs if not d.is_abnormal]
-        # 近日進貨：同日期 (biz 當日) 所有表格有進貨的品項進貨量 (跨庫別彙總)
-        recent_date, recent_inbound = self._inv_service.get_recent_inbound(before_date=biz, same_day=True)
+        # 近日進貨：永遠取全資料庫最新有進貨量(inbound_qty>0)的那一天（不分庫別、不受表格日期限制）
+        recent_date, recent_inbound = self._inv_service.get_recent_inbound(same_day=True)
         recent_hint = f"（近日進貨基準日：{recent_date}）" if recent_date else "（無進貨紀錄）"
         tk.Label(win, text=f"共 {len(diffs)} 品項（🔴異常 {len(abnormal)} / ⚪正常 {len(normal)}）{recent_hint}",
                  fg=FG_COLOR, bg=BG_COLOR, font=BOX_FONT).pack(anchor='w', padx=14, pady=(10, 4))
@@ -1694,21 +1634,35 @@ class UnifiedOCRApp:
         box.bind("<Configure>", lambda e: cvs.configure(scrollregion=cvs.bbox("all")))
         cvs.create_window((0, 0), window=box, anchor='nw'); cvs.configure(yscrollcommand=sb.set)
         hdr = tk.Frame(box, bg=BG_COLOR)
-        for i, txt in enumerate(["庫別", "品項", "近日進貨", "理論", "實際", "損耗量", "損耗率"]):
+        for i, txt in enumerate(["品項", "近日進貨", "理論", "實際", "損耗量", "損耗率", "庫別"]):
             tk.Label(hdr, text=txt, fg=FG_COLOR, bg=BG_COLOR, font=BOX_FONT, width=12).grid(row=0, column=i, padx=2)
         hdr.pack(anchor='w', padx=8, pady=4)
         for color, grp in [('#ff4444', abnormal), ('#cccccc', normal)]:
             for d in grp:
                 rw = tk.Frame(box, bg=BG_COLOR)
                 recent_qty = f"{recent_inbound[d.item_name]:.1f}" if d.item_name in recent_inbound else ""
-                for j, val in enumerate([d.library, d.item_name, recent_qty,
+                for j, val in enumerate([d.item_name, recent_qty,
                                          f"{d.expected_qty:.1f}", f"{d.actual_qty:.1f}",
-                                         f"{d.loss_qty:+.2f}", f"{d.loss_pct:.1f}%"]):
+                                         f"{d.loss_qty:+.2f}", f"{d.loss_pct:.1f}%", d.library]):
                     tk.Label(rw, text=val, fg=color, bg=BG_COLOR, font=BOX_FONT, width=12).grid(row=0, column=j, padx=2)
                 rw.pack(anchor='w', padx=8)
         cvs.pack(side='left', fill='both', expand=True, padx=8, pady=8)
         sb.pack(side='right', fill='y')
-        tk.Button(win, text="關閉", command=win.destroy, bg=BTN_BG, fg=FG_COLOR, font=BOX_FONT).pack(pady=6)
+        # 滑鼠滾輪支援
+        def _on_mousewheel(event):
+            cvs.yview_scroll(int(-1*(event.delta/120)), "units")
+        def _on_mousewheel_linux(event):
+            cvs.yview_scroll(-1, "units")
+        def _on_mousewheel_linux_down(event):
+            cvs.yview_scroll(1, "units")
+        cvs.bind_all("<MouseWheel>", _on_mousewheel)        # Windows/macOS
+        cvs.bind_all("<Button-4>", _on_mousewheel_linux)    # Linux scroll up
+        cvs.bind_all("<Button-5>", _on_mousewheel_linux_down)  # Linux scroll down
+        btn_w = 12
+        tk.Button(win, text="🔄 刷新", command=lambda: [win.destroy(), self._show_inventory_panel()],
+                  bg=BTN_BG, fg=FG_COLOR, font=BOX_FONT, width=btn_w).pack(pady=(6, 2))
+        tk.Button(win, text="關閉", command=win.destroy,
+                  bg=BTN_BG, fg=FG_COLOR, font=BOX_FONT, width=btn_w).pack(pady=(2, 6))
 
     # --- Phase 7: 品項管理 ---
     def _show_item_manager(self):
@@ -1724,7 +1678,7 @@ class UnifiedOCRApp:
         # 使用 grid 讓各欄(品項/狀態/分類/屬性按鈕)垂直對齊
         for r, ci in enumerate(items):
             f = tk.Frame(box,bg=BG_COLOR)
-            tk.Label(f,text=ci.canonical_name,fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16,anchor='w').grid(row=0,column=0,padx=4,sticky='w')
+            tk.Label(f,text=ci.canonical_name,fg=FG_COLOR,bg=BG_COLOR,font=BOX_FONT,width=16,anchor='w').grid(row=0,column=0,padx=4,sticky='w')
             status = "✓" if ci.is_active else "✗"
             tk.Label(f,text=status,fg='#00cc00' if ci.is_active else '#ff4444',bg=BG_COLOR,font=SMALL_FONT,width=3).grid(row=0,column=1,padx=4)
             tk.Label(f,text=f"{ci.category or ''}",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT,width=8,anchor='w').grid(row=0,column=2,padx=4,sticky='w')
@@ -1733,47 +1687,72 @@ class UnifiedOCRApp:
             f.pack(anchor='w',padx=8,pady=2)
         cvs.pack(side='left',fill='both',expand=True,padx=8,pady=8)
         sb.pack(side='right',fill='y')
+        # 滑鼠滾輪支援
+        def _on_mousewheel(event):
+            cvs.yview_scroll(int(-1*(event.delta/120)), "units")
+        def _on_mousewheel_linux(event):
+            cvs.yview_scroll(-1, "units")
+        def _on_mousewheel_linux_down(event):
+            cvs.yview_scroll(1, "units")
+        cvs.bind_all("<MouseWheel>", _on_mousewheel)
+        cvs.bind_all("<Button-4>", _on_mousewheel_linux)
+        cvs.bind_all("<Button-5>", _on_mousewheel_linux_down)
         tk.Button(win,text="關閉",command=win.destroy,bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT).pack(pady=6)
 
     def _show_item_attrs(self, name):
-        """Phase 8: 單品項屬性編輯"""
-        win = tk.Toplevel(self.root); win.title(f"{name} 的屬性"); win.geometry("540x400"); win.configure(bg=BG_COLOR)
-        tk.Label(win,text=f"品項: {name}",fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
+            """Phase 8: 單品項屬性編輯"""
+            win = tk.Toplevel(self.root); win.title(f"{name} 的屬性"); win.geometry("540x400"); win.configure(bg=BG_COLOR)
+            tk.Label(win, text=f"品項: {name}", fg=FG_COLOR, bg=BG_COLOR, font=BOX_FONT).pack(anchor='w', padx=14, pady=(10, 4))
 
-        # 分類下拉 (存入 canonical_items.category)
-        cur_ci = next((c for c in self._ocr_service.repo.get_all_canonical_items(active_only=False)
-                       if c.canonical_name == name), None)
-        cat_frame = tk.Frame(win,bg=BG_COLOR); cat_frame.pack(fill='x',padx=14,pady=2)
-        tk.Label(cat_frame,text="分類:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16,anchor='w').pack(side='left')
-        cat_var = tk.StringVar(value=(cur_ci.category if cur_ci and cur_ci.category else ''))
-        ttk.Combobox(cat_frame,textvariable=cat_var,values=["水果","蔬菜","肉類","其他"],
-                     state='readonly',width=18,font=SMALL_FONT).pack(side='left')
+            # 分類下拉 (存入 canonical_items.category)
+            cur_ci = next((c for c in self._ocr_service.repo.get_all_canonical_items(active_only=False)
+                           if c.canonical_name == name), None)
+            cat_frame = tk.Frame(win, bg=BG_COLOR); cat_frame.pack(fill='x', padx=14, pady=2)
+            tk.Label(cat_frame, text="分類:", fg=FG_COLOR, bg=BG_COLOR, font=BOX_FONT, width=16, anchor='w').pack(side='left')
+            cat_var = tk.StringVar(value=(cur_ci.category if cur_ci and cur_ci.category else ''))
+            ttk.Combobox(cat_frame, textvariable=cat_var, values=["水果", "蔬菜", "肉類", "其他"],
+                         state='readonly', width=18, font=BOX_FONT).pack(side='left')
 
-        attrs = self._ocr_service.get_item_attributes(name)
-        entries = {}
-        # 屬性 key (資料庫欄位) -> 中文標籤
-        attr_labels = {
-            'shelf_life_days': '保存天數',
-            'normal_loss_pct': '正常損耗率(%)',
-            'expiry_date': '到期日(YYYY-MM-DD)',
-            'unit': '單位',
-        }
-        for key in ['shelf_life_days','normal_loss_pct','expiry_date','unit']:
-            f = tk.Frame(win,bg=BG_COLOR); f.pack(fill='x',padx=14,pady=2)
-            tk.Label(f,text=f"{attr_labels[key]}:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=16,anchor='w').pack(side='left')
-            val = tk.StringVar(value=attrs.get(key,''))
-            tk.Entry(f,textvariable=val,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT,width=20).pack(side='left')
-            entries[key] = val
-        def save():
-            # 儲存分類
-            if cat_var.get().strip():
-                self._ocr_service.repo.upsert_canonical_item(name, category=cat_var.get().strip())
-            for k,v in entries.items():
-                if v.get().strip():
-                    self._ocr_service.set_item_attribute(name,k,v.get().strip())
-            win.destroy()
-            self.log(f"已更新 {name} 屬性")
-        tk.Button(win,text="儲存",command=save,bg='#cc6600',fg=FG_COLOR,font=DEFAULT_FONT).pack(pady=10)
+            attrs = self._ocr_service.get_item_attributes(name)
+            entries = {}
+            # 屬性 key (資料庫欄位) -> 中文標籤
+            attr_labels = {
+                'shelf_life_days': '保存天數',
+                'normal_loss_pct': '正常損耗率(%)',
+                'expiry_date': '到期日',
+                'unit': '單位',
+            }
+            for key in ['shelf_life_days', 'normal_loss_pct', 'expiry_date', 'unit']:
+                f = tk.Frame(win, bg=BG_COLOR); f.pack(fill='x', padx=14, pady=2)
+                tk.Label(f, text=f"{attr_labels[key]}:", fg=FG_COLOR, bg=BG_COLOR, font=BOX_FONT, width=16, anchor='w').pack(side='left')
+                if key == 'shelf_life_days':
+                    val = tk.StringVar(value=attrs.get(key, ''))
+                    ttk.Combobox(f, textvariable=val, values=["3", "5", "7", "10", "14", "21", "30", "60"],
+                                 state='readonly', width=18, font=BOX_FONT).pack(side='left')
+                    entries[key] = val
+                elif key == 'normal_loss_pct':
+                    val = tk.StringVar(value=attrs.get(key, ''))
+                    ttk.Combobox(f, textvariable=val, values=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "20"],
+                                 state='readonly', width=18, font=BOX_FONT).pack(side='left')
+                    entries[key] = val
+                elif key == 'expiry_date':
+                    val = tk.StringVar(value=attrs.get(key, ''))
+                    tk.Entry(f, textvariable=val, bg=ENTRY_BG, fg=FG_COLOR, font=BOX_FONT, width=20).pack(side='left')
+                    entries[key] = val
+                else:
+                    val = tk.StringVar(value=attrs.get(key, ''))
+                    tk.Entry(f, textvariable=val, bg=ENTRY_BG, fg=FG_COLOR, font=BOX_FONT, width=20).pack(side='left')
+                    entries[key] = val
+            def save():
+                # 儲存分類
+                if cat_var.get().strip():
+                    self._ocr_service.repo.upsert_canonical_item(name, category=cat_var.get().strip())
+                for k, v in entries.items():
+                    if v.get().strip():
+                        self._ocr_service.set_item_attribute(name, k, v.get().strip())
+                win.destroy()
+                self.log(f"已更新 {name} 屬性")
+            tk.Button(win, text="儲存", command=save, bg='#cc6600', fg=FG_COLOR, font=BOX_FONT).pack(pady=10)
 
     # --- Phase 8: 規則管理 ---
     def _show_rule_manager(self):
@@ -1793,6 +1772,16 @@ class UnifiedOCRApp:
             tk.Label(f,text=R.severity,fg='#ffaa00',bg=BG_COLOR,font=SMALL_FONT).pack(side='left',padx=4)
         cvs.pack(side='left',fill='both',expand=True,padx=8,pady=8)
         sb.pack(side='right',fill='y')
+        # 滑鼠滾輪支援
+        def _on_mousewheel(event):
+            cvs.yview_scroll(int(-1*(event.delta/120)), "units")
+        def _on_mousewheel_linux(event):
+            cvs.yview_scroll(-1, "units")
+        def _on_mousewheel_linux_down(event):
+            cvs.yview_scroll(1, "units")
+        cvs.bind_all("<MouseWheel>", _on_mousewheel)
+        cvs.bind_all("<Button-4>", _on_mousewheel_linux)
+        cvs.bind_all("<Button-5>", _on_mousewheel_linux_down)
         tk.Button(win,text="關閉",command=win.destroy,bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT).pack(pady=6)
 
     # -------------------
