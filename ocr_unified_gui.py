@@ -1034,6 +1034,7 @@ class UnifiedOCRApp:
     @staticmethod
     def _parse_library_from_text(text: str) -> str | None:
         """從文字擷取庫別名稱。優先含「庫」或「倉」的片段 (如 4-1庫 / A倉 / 凍庫)。"""
+        import re
         s = str(text).strip()
         if not s:
             return None
