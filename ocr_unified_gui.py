@@ -1212,7 +1212,7 @@ class UnifiedOCRApp:
         for i,txt in enumerate(["品項","理論","實際","損耗量","損耗率"]):
             tk.Label(hdr,text=txt,fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=10).grid(row=0,column=i,padx=2)
         hdr.pack(anchor='w',padx=8,pady=4)
-        for color,grp in [('#ff4444',abnormal),('#4488ff',normal)]:
+        for color,grp in [('#ff4444',abnormal),('#cccccc',normal)]:
             for d in grp:
                 rw = tk.Frame(box,bg=BG_COLOR)
                 for j,val in enumerate([d.item_name,f"{d.expected_qty:.1f}",f"{d.actual_qty:.1f}",f"{d.loss_qty:+.2f}",f"{d.loss_pct:.1f}%"]):
