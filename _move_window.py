@@ -3,7 +3,7 @@ import ctypes, ctypes.util, sys
 x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
 x11.XOpenDisplay.restype = ctypes.c_void_p
 x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
-x11.XMoveWindow.argtypes = [ctypes.c_void_p, c_ulong, c_int, c_int]
+x11.XMoveWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int]
 x11.XFlush.argtypes = [ctypes.c_void_p]
 x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
 
