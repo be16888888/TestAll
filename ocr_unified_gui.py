@@ -76,12 +76,14 @@ class UnifiedOCRApp:
         self.api_keys = {}
         # hash tracking
         self.image_hashes = {}       # hash -> original_path
-        self._load_hash_db()
 
         # UI
         self._build_top_bar()
         self._build_middle()
         self._build_bottom_log()
+
+        # 載入雜湊資料庫 (需在 log_area 建立後，因會呼叫 self.log)
+        self._load_hash_db()
 
         # keys
         try:
