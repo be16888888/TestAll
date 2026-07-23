@@ -996,31 +996,51 @@ class UnifiedOCRApp:
             self._edit_row_id = None
             self._edit_col_idx = None
 
-    def _auto_fill_date_from_ocr(self, after_text, headers):
-        """從 OCR 結果自動帶入「表格日期」(未回存前)。
-        支援：民國年 115/7/22、115.7.22；西元 2026-07-22、2026/7/22。
-        來源優先序：下方文字 > 表格日期欄。使用者手動修改後不會被覆蓋(僅在此載入時帶入)。
+    def _auto_fill_from_ocr(self, before_text, after_text, headers):
+        """從 OCR 結果自動帶入「表格日期」與「庫別」(未回存前)。
+        - 日期：表格上方文字優先，其次下方文字，其次表格日期欄。
+        - 庫別：從表格上方文字擷取含「庫/倉」的辨識文字 (如 4-1庫、A倉)。
+        使用者手動修改後不會被覆蓋 (僅在此載入時帶入)。
         """
         import re
-        text_sources = list(after_text) if after_text else []
-        # 也掃描表格內含「日期」的欄位第一列值
+        # 日期來源：上方 > 下方 > 表格日期欄
+        date_sources = (list(before_text) if before_text else []) + (list(after_text) if after_text else [])
         try:
             for ci, h in enumerate(headers):
                 if '日期' in str(h) or 'date' in str(h).lower():
                     for rid in self.tree.get_children():
                         vs = self.tree.item(rid, 'values')
                         if ci < len(vs) and str(vs[ci]).strip():
-                            text_sources.append(str(vs[ci]))
+                            date_sources.append(str(vs[ci]))
                             break
         except Exception:
             pass
-
-        for txt in text_sources:
+        for txt in date_sources:
             iso = self._parse_date_to_iso(txt)
             if iso:
                 self.biz_date_var.set(iso)
                 self.log(f"已自動帶入表格日期：{iso}")
-                return
+                break
+
+        # 庫別來源：表格上方文字 (含 庫/倉 的行)
+        if before_text:
+            for txt in before_text:
+                lib = self._parse_library_from_text(txt)
+                if lib:
+                    self.lib_var.set(lib)
+                    self.log(f"已自動帶入庫別：{lib}")
+                    break
+
+    @staticmethod
+    def _parse_library_from_text(text: str) -> str | None:
+        """從文字擷取庫別名稱。優先含「庫」或「倉」的片段 (如 4-1庫 / A倉 / 凍庫)。"""
+        s = str(text).strip()
+        if not s:
+            return None
+        # 直接含 庫/倉 字 -> 整行視為庫別 (去除多餘空白)
+        if '庫' in s or '倉' in s:
+            return re.sub(r'\s+', '', s)
+        return None
 
     @staticmethod
     def _parse_date_to_iso(text: str) -> str | None:
