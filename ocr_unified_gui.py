@@ -303,6 +303,24 @@ class UnifiedOCRApp:
         vsb.config(command=self.tree.yview)
         hsb.config(command=self.tree.xview)
 
+        # 表格上方文字區域 (Phase 10: 比照下方，可編輯，供日期/庫別辨識錯誤時修改)
+        self.before_table_frame = tk.Frame(right, bg=BG_COLOR)
+        self.before_table_label = tk.Label(
+            self.before_table_frame, text="表格上方文字：", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT
+        )
+        self.before_table_label.pack(anchor='w', pady=(6, 2))
+        self.before_table_text = scrolledtext.ScrolledText(
+            self.before_table_frame, height=4, bg=LOG_BG, fg=LOG_FG,
+            font=SMALL_FONT, state='normal', wrap='word'
+        )
+        self.before_table_text.pack(fill='x')
+        self.before_table_frame.pack(fill='x', pady=(4, 0))
+        def _on_before_text_modified(event):
+            if self.before_table_text.edit_modified():
+                self._dirty = True
+                self.before_table_text.edit_modified(False)
+        self.before_table_text.bind('<<Modified>>', _on_before_text_modified)
+
         # 表格下方文字區域
         self.after_table_frame = tk.Frame(right, bg=BG_COLOR)
         self.after_table_label = tk.Label(
