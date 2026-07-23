@@ -236,14 +236,15 @@ class OCRReviewService:
             return result
 
         # ---- Step 1: 圖片去重 ----
-        duplicates = self.check_image_duplicate(source_image_hash)
-        if duplicates:
-            n = len(duplicates)
-            dates = sorted({d.reviewed_at[:10] for d in duplicates})
-            date_list = "、".join(dates)
-            msg = f"此圖片已審核過 {n} 次（日期：{date_list}），拒絕重複入庫"
-            result.errors.append(msg)
-            return result
+        if not skip_dup_check:
+            duplicates = self.check_image_duplicate(source_image_hash)
+            if duplicates:
+                n = len(duplicates)
+                dates = sorted({d.reviewed_at[:10] for d in duplicates})
+                date_list = "、".join(dates)
+                msg = f"此圖片已審核過 {n} 次（日期：{date_list}），拒絕重複入庫"
+                result.errors.append(msg)
+                return result
 
         # ---- Step 2: 更新/建立 canonical item ----
         self.repo.upsert_canonical_item(item_name, category=None)  # category 由使用者後續設定
