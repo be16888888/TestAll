@@ -57,8 +57,13 @@ for lib, items in [("3庫", [("高麗菜", 361.0), ("包心白", 95.0)]),
     except Exception:
         pass
     for name, qty in items:
-        repo.save_reviewed_item(biz, lib, name, name, qty,
-                                source_image_hash="verify", reviewed_at="2026-07-17T00:00:00")
+        repo.execute(
+            "INSERT INTO ocr_reviewed_items "
+            "(review_date, library, item_name, ocr_raw_name, ocr_text, word_path, quantity, "
+            "source_image_path, source_image_hash, reviewed_at, is_verified) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (biz, lib, name, name, name, "verify.docx", qty,
+             "verify.png", "verify", "2026-07-17T00:00:00", 1))
 
 # 模擬 _show_inventory_panel 的 lib 決策邏輯
 def resolve_libs(lib, biz):
