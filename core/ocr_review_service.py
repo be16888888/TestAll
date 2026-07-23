@@ -304,6 +304,39 @@ class OCRReviewService:
         result.message = f"✅「{item_name}」已入庫（{review_date} / {library}）"
         return result
 
+    def save_reviewed_rows(self, rows: list[dict]) -> list[ReviewResult]:
+        """Phase 9: 批次多品項入庫。rows 為 dict 清單，每列欄位：
+            review_date, library, item_name, ocr_raw_name, ocr_text, word_path,
+            quantity, unit, source_image_path, source_image_hash,
+            prev_stock, outbound_qty, inbound_qty, closing_qty, unit_price, loss_qty
+            (多品項共用同一 review_date/library/word_path/image，逐列各自 item_name + 數量欄)
+        回傳每列的 ReviewResult。
+        """
+        results: list[ReviewResult] = []
+        for r in rows:
+            # 補足多品項欄位預設值
+            res = self.save_reviewed_item(
+                review_date=r["review_date"],
+                library=r["library"],
+                item_name=r["item_name"],
+                ocr_raw_name=r.get("ocr_raw_name", r["item_name"]),
+                ocr_text=r.get("ocr_text", ""),
+                word_path=r.get("word_path", ""),
+                quantity=float(r.get("quantity", 0) or 0),
+                source_image_path=r.get("source_image_path", ""),
+                source_image_hash=r.get("source_image_hash", "no_image"),
+                unit=r.get("unit", "公斤"),
+                # Phase 9 多品項欄位
+                prev_stock=float(r.get("prev_stock", 0) or 0),
+                outbound_qty=float(r.get("outbound_qty", 0) or 0),
+                inbound_qty=float(r.get("inbound_qty", 0) or 0),
+                closing_qty=float(r.get("closing_qty", 0) or 0),
+                unit_price=r.get("unit_price") or None,
+                loss_qty=float(r.get("loss_qty", 0) or 0),
+            )
+            results.append(res)
+        return results
+
     # ----------------------------------------------------------
     # 5. 內建規則
     # ----------------------------------------------------------
