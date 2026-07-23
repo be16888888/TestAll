@@ -1506,6 +1506,10 @@ class UnifiedOCRApp:
     def _show_inventory_panel(self):
         if not self._ensure_db(): return
         biz = self.biz_date_var.get().strip()
+        # 表格日期欄為民國顯示格式 (115-07-17)，庫存計算需西元 ISO
+        biz_iso = self._normalize_date_to_iso(biz)
+        if biz_iso:
+            biz = biz_iso
         lib = self.lib_var.get().strip()
         try:
             diffs = self._inv_service.calculate_daily(biz, lib)
