@@ -272,16 +272,9 @@ class UnifiedOCRApp:
         )
         self.word_status.pack(side='left', padx=12)
 
-        # file path display
-        self.word_path_var = tk.StringVar(value="")
-        path_bar = tk.Frame(right, bg=BG_COLOR)
-        path_bar.pack(fill='x', pady=(0, 4))
-        tk.Label(
-            path_bar, textvariable=self.word_path_var,
-            fg='#aaaaaa', bg=BG_COLOR, font=WORD_FILENAME_FONT, anchor='w'
-        ).pack(side='left', fill='x', expand=True)
-
         # 表格上方文字區域 (Phase 10: 表格上方，可編輯，供日期/庫別辨識錯誤時修改)
+        # 註：原獨立檔名列 (path_bar / word_path_var) 已移除，
+        # 辨識後檔名(標頭)現統一顯示於「表格上方文字」框 (見 _load_docx_to_treeview Phase 10.5)
         self.before_table_frame = tk.Frame(right, bg=BG_COLOR)
         self.before_table_label = tk.Label(
             self.before_table_frame, text="表格上方文字：", fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT
@@ -830,13 +823,7 @@ class UnifiedOCRApp:
         image = self._current_image_path()
         docx = self.latest_docx_paths.get(image) if image else None
         has_docx = docx and os.path.exists(docx)
-        if docx:
-            # 只顯示檔名，字體 12
-            self.word_path_var.set(os.path.basename(docx))
-        elif image:
-            self.word_path_var.set("（此圖片尚未產出 Word）")
-        else:
-            self.word_path_var.set("")
+        # 檔名不再於此處單獨顯示（已併入「表格上方文字」框，見 Phase 10 / 10.5）
         if has_docx:
             self.save_word_btn.config(state='normal')
             self.word_status.config(text="✅ 已就緒", fg='#00ff00')
@@ -927,6 +914,13 @@ class UnifiedOCRApp:
                         text = para.text.strip() if hasattr(para, 'text') else ''
                         if text:
                             before_text.append(text)
+            # Phase 10.5: 若 Word 表格前無辨識段落，且本 docx 由 OCR 產出，
+            # 將檔名（辨識標頭，如 115年3月17日(3庫).docx）帶入「表格上方文字」框，
+            # 使原本僅顯示於檔名列的辨識文字統一呈現於該框（可供手改日期/庫別）。
+            if not before_text and docx_path:
+                hdr = os.path.basename(docx_path)
+                if hdr:
+                    before_text = [hdr]
             # 顯示下方文字
             self.after_table_text.config(state='normal')
             self.after_table_text.delete('1.0', tk.END)
@@ -1610,49 +1604,82 @@ class UnifiedOCRApp:
         if biz_iso:
             biz = biz_iso
         lib = self.lib_var.get().strip()
-        if not lib:
-            self.log("⚠️ 庫別為空，無法預覽庫存")
-            return
-        # 庫別為 OCR 辨識文字 (如 4-1庫)，需先確保存在 libraries 表 (FK 相容)
-        try:
-            self._ocr_service.repo.ensure_library(lib, lib_type='storage')
-        except Exception as e:
-            self.log(f"庫別寫入 libraries 失敗：{e}")
-        try:
-            diffs = self._inv_service.calculate_daily(biz, lib)
-        except Exception as e:
-            self.log(f"庫存計算失敗：{e}")
-            return
+
+        # 庫別為空時：預覽該日期「所有庫別」的品項（並於表格加入「庫別」欄位），
+        # 不再因庫別為空而直接拒絕。資料來源優先 ocr_reviewed_items，其次 daily_inventory。
+        if lib:
+            libs = [lib]
+        else:
+            try:
+                rows = self._inv_service.repo.execute(
+                    "SELECT DISTINCT library FROM ocr_reviewed_items WHERE review_date = ?", (biz,))
+                libs = [dict(r)["library"] for r in rows if dict(r).get("library")]
+            except Exception:
+                libs = []
+            if not libs:
+                try:
+                    rows = self._inv_service.repo.execute(
+                        "SELECT DISTINCT library FROM daily_inventory WHERE snapshot_date = ?", (biz,))
+                    libs = [dict(r)["library"] for r in rows if dict(r).get("library")]
+                except Exception:
+                    libs = []
+            if not libs:
+                # 該日期無任何庫別紀錄：退回全庫別，確保預覽仍能開啟
+                try:
+                    rows = self._inv_service.repo.execute("SELECT DISTINCT library FROM ocr_reviewed_items")
+                    libs = [dict(r)["library"] for r in rows if dict(r).get("library")]
+                except Exception:
+                    libs = []
+
+        # 確保各庫別存在 libraries 表 (FK 相容)，並計算每日庫存差異
+        diffs = []
+        for l in libs:
+            try:
+                self._ocr_service.repo.ensure_library(l, lib_type='storage')
+            except Exception as e:
+                self.log(f"庫別寫入 libraries 失敗：{e}")
+            try:
+                d = self._inv_service.calculate_daily(biz, l)
+                diffs.extend(d.values())
+            except Exception as e:
+                self.log(f"庫存計算失敗（{l}）：{e}")
+
+        if not diffs:
+            self.log("⚠️ 該日期尚無任何庫存/辨識資料，已開啟空白預覽")
+        else:
+            self.log(f"庫存預覽：{len(diffs)} 筆（庫別：{', '.join(libs) or '無'}）")
 
         win = tk.Toplevel(self.root)
-        win.title(f"庫存概览 {biz}/{lib}"); win.geometry("760x540"); win.configure(bg=BG_COLOR)
-        abnormal = [d for d in diffs.values() if d.is_abnormal]
-        normal = [d for d in diffs.values() if not d.is_abnormal]
-        # 近日進貨：最近一日有進貨的品項數量 (僅該日有進貨者顯示，其餘留空)
+        title = f"庫存概览 {biz}" + (f"/{lib}" if lib else "（全部庫別）")
+        win.title(title); win.geometry("900x540"); win.configure(bg=BG_COLOR)
+        abnormal = [d for d in diffs if d.is_abnormal]
+        normal = [d for d in diffs if not d.is_abnormal]
+        # 近日進貨：最近一日有進貨的品項數量（跨庫別彙總）
         recent_date, recent_inbound = self._inv_service.get_recent_inbound(before_date=biz)
         recent_hint = f"（近日進貨基準日：{recent_date}）" if recent_date else "（無進貨紀錄）"
-        lbl = tk.Label(win,text=f"共 {len(diffs)} 品項（🔴異常 {len(abnormal)} / ⚪正常 {len(normal)}）{recent_hint}",
-                       fg=FG_COLOR,bg=BG_COLOR,font=TITLE_FONT).pack(anchor='w',padx=14,pady=(10,4))
-        cvs = tk.Canvas(win,bg=BG_COLOR,highlightthickness=0)
-        sb = ttk.Scrollbar(win,orient='vertical',command=cvs.yview)
-        box = tk.Frame(cvs,bg=BG_COLOR)
-        box.bind("<Configure>",lambda e:cvs.configure(scrollregion=cvs.bbox("all")))
-        cvs.create_window((0,0),window=box,anchor='nw'); cvs.configure(yscrollcommand=sb.set)
-        hdr = tk.Frame(box,bg=BG_COLOR)
-        for i,txt in enumerate(["品項","近日進貨","理論","實際","損耗量","損耗率"]):
-            tk.Label(hdr,text=txt,fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT,width=10).grid(row=0,column=i,padx=2)
-        hdr.pack(anchor='w',padx=8,pady=4)
-        for color,grp in [('#ff4444',abnormal),('#cccccc',normal)]:
+        tk.Label(win, text=f"共 {len(diffs)} 品項（🔴異常 {len(abnormal)} / ⚪正常 {len(normal)}）{recent_hint}",
+                 fg=FG_COLOR, bg=BG_COLOR, font=TITLE_FONT).pack(anchor='w', padx=14, pady=(10, 4))
+        cvs = tk.Canvas(win, bg=BG_COLOR, highlightthickness=0)
+        sb = ttk.Scrollbar(win, orient='vertical', command=cvs.yview)
+        box = tk.Frame(cvs, bg=BG_COLOR)
+        box.bind("<Configure>", lambda e: cvs.configure(scrollregion=cvs.bbox("all")))
+        cvs.create_window((0, 0), window=box, anchor='nw'); cvs.configure(yscrollcommand=sb.set)
+        hdr = tk.Frame(box, bg=BG_COLOR)
+        for i, txt in enumerate(["庫別", "品項", "近日進貨", "理論", "實際", "損耗量", "損耗率"]):
+            tk.Label(hdr, text=txt, fg=FG_COLOR, bg=BG_COLOR, font=SMALL_FONT, width=12).grid(row=0, column=i, padx=2)
+        hdr.pack(anchor='w', padx=8, pady=4)
+        for color, grp in [('#ff4444', abnormal), ('#cccccc', normal)]:
             for d in grp:
-                rw = tk.Frame(box,bg=BG_COLOR)
-                # 近日進貨：該品項最近一日有進貨才顯示數量，否則留空
+                rw = tk.Frame(box, bg=BG_COLOR)
                 recent_qty = f"{recent_inbound[d.item_name]:.1f}" if d.item_name in recent_inbound else ""
-                for j,val in enumerate([d.item_name,recent_qty,f"{d.expected_qty:.1f}",f"{d.actual_qty:.1f}",f"{d.loss_qty:+.2f}",f"{d.loss_pct:.1f}%"]):
-                    tk.Label(rw,text=val,fg=color,bg=BG_COLOR,font=SMALL_FONT,width=10).grid(row=0,column=j,padx=2)
-                rw.pack(anchor='w',padx=8)
-        cvs.pack(side='left',fill='both',expand=True,padx=8,pady=8)
-        sb.pack(side='right',fill='y')
-        tk.Button(win,text="關閉",command=win.destroy,bg=BTN_BG,fg=FG_COLOR,font=SMALL_FONT).pack(pady=6)
+                for j, val in enumerate([d.library, d.item_name, recent_qty,
+                                         f"{d.expected_qty:.1f}", f"{d.actual_qty:.1f}",
+                                         f"{d.loss_qty:+.2f}", f"{d.loss_pct:.1f}%"]):
+                    tk.Label(rw, text=val, fg=color, bg=BG_COLOR, font=SMALL_FONT, width=12).grid(row=0, column=j, padx=2)
+                rw.pack(anchor='w', padx=8)
+        cvs.pack(side='left', fill='both', expand=True, padx=8, pady=8)
+        sb.pack(side='right', fill='y')
+        tk.Button(win, text="關閉", command=win.destroy, bg=BTN_BG, fg=FG_COLOR, font=SMALL_FONT).pack(pady=6)
 
     # --- Phase 7: 品項管理 ---
     def _show_item_manager(self):
