@@ -94,7 +94,8 @@ for l in libs:
         repo.ensure_library(l, lib_type='storage')
     except Exception:
         pass
-    d = inv.calculate_daily(biz, l)
+    # 僅對本驗證插入的品項計算，避免對全量 canonical_items 計算 (真實環境才需要全量)
+    d = inv.calculate_daily(biz, l, items=["高麗菜", "包心白", "山東白"])
     diffs.extend(d.values())
 
 check("BugB: 彙總品項數=3", len(diffs) == 3, f"n={len(diffs)}")
