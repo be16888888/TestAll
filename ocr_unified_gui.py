@@ -364,11 +364,8 @@ class UnifiedOCRApp:
         # 庫別：顯示 OCR 辨識出的文字 (如 4-1庫)，可手動編輯；入庫前自動 upsert 進 libraries 表 (FK 相容)
         self.lib_var = tk.StringVar(value="")
         tk.Entry(db_row,textvariable=self.lib_var,width=12,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=3,padx=(0,12))
-        tk.Label(db_row,text="品項:",fg=FG_COLOR,bg=BG_COLOR,font=SMALL_FONT).grid(row=0,column=4,sticky='w',padx=(0,4))
-        self.item_name_var = tk.StringVar()
-        tk.Entry(db_row,textvariable=self.item_name_var,width=18,bg=ENTRY_BG,fg=FG_COLOR,font=SMALL_FONT).grid(row=0,column=5)
         self.db_status_lbl = tk.Label(db_row,text="",fg='#aaaaaa',bg=BG_COLOR,font=SMALL_FONT)
-        self.db_status_lbl.grid(row=0,column=6,padx=(12,0))
+        self.db_status_lbl.grid(row=0,column=4,padx=(12,0))
 
         # --- 品項屬性顯示區 (Phase 11: 單擊表格列即顯示該品項屬性 + 近日進貨) ---
         self.item_attr_frame = tk.Frame(right, bg=BG_COLOR)
