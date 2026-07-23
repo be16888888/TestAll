@@ -1515,16 +1515,18 @@ class UnifiedOCRApp:
                     self._show_alerts(r.alerts)
                     break
         else:
-            # 舊單品項相容邏輯
-            item_name = self.item_name_var.get().strip()
-            if not item_name:
-                try:
-                    if row_ids and self.tree['columns']:
-                        vals = self.tree.item(row_ids[0], 'values')
-                        if vals and vals[0]:
-                            item_name = str(vals[0]).strip()
-                except Exception:
-                    pass
+            # 舊單品項相容邏輯 (表格無進/出貨欄時)
+            item_name = ""
+            try:
+                if row_ids and self.tree['columns']:
+                    vals = self.tree.item(row_ids[0], 'values')
+                    for i, h in enumerate(self.tree['columns']):
+                        if '品項' in str(h) or 'item' in str(h).lower():
+                            if i < len(vals) and str(vals[i]).strip():
+                                item_name = str(vals[i]).strip()
+                            break
+            except Exception:
+                pass
             if not item_name:
                 self.db_status_lbl.config(text="⚠️ 品項為空", fg='orange')
                 return
