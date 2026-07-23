@@ -281,7 +281,7 @@ class UnifiedOCRApp:
         )
         self.before_table_label.pack(anchor='w', pady=(6, 2))
         self.before_table_text = scrolledtext.ScrolledText(
-            self.before_table_frame, height=1, bg=LOG_BG, fg=LOG_FG,
+            self.before_table_frame, height=4, bg=LOG_BG, fg=LOG_FG,
             font=BOX_FONT, state='normal', wrap='word'
         )
         self.before_table_text.pack(fill='x')
@@ -914,13 +914,14 @@ class UnifiedOCRApp:
                         text = para.text.strip() if hasattr(para, 'text') else ''
                         if text:
                             before_text.append(text)
-            # Phase 10.5: 若 Word 表格前無辨識段落，且本 docx 由 OCR 產出，
-            # 將檔名（辨識標頭，如 115年3月17日(3庫).docx）帶入「表格上方文字」框，
-            # 使原本僅顯示於檔名列的辨識文字統一呈現於該框（可供手改日期/庫別）。
-            if not before_text and docx_path:
-                hdr = os.path.basename(docx_path)
-                if hdr:
-                    before_text = [hdr]
+            # Phase 10.5: 將檔名（辨識標頭，如 115年3月17日(3庫)）補入「表格上方文字」框首行，
+            # 確保 OCR 回傳的日期+庫別標頭一定可見（可供手改 / 供 _auto_fill_from_ocr 擷取）。
+            # 若表格前已有辨識段落 (如 "(3庫)進、銷貨庫存表 115年 3月 17日") 仍保留，
+            # 檔名僅作去重補首行，不覆蓋既有內容。
+            if docx_path:
+                hdr = os.path.splitext(os.path.basename(docx_path))[0]  # 去 .docx
+                if hdr and hdr not in before_text:
+                    before_text.insert(0, hdr)
             # 顯示下方文字
             self.after_table_text.config(state='normal')
             self.after_table_text.delete('1.0', tk.END)
