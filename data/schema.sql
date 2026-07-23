@@ -90,9 +90,17 @@ CREATE TABLE IF NOT EXISTS ocr_reviewed_items (
     -- 產出
     word_path    TEXT    NOT NULL,           -- .docx 路徑
 
-    -- 數量
+    -- 數量 (舊單品項欄位，保留向後相容)
     quantity     REAL    NOT NULL DEFAULT 0,
     unit         TEXT    NOT NULL DEFAULT '公斤',
+
+    -- 多品項庫存結算表欄位 (Phase 9: 每日多品項日結表)
+    prev_stock   REAL    NOT NULL DEFAULT 0,    -- 前日庫存
+    outbound_qty REAL    NOT NULL DEFAULT 0,    -- 出貨量
+    inbound_qty  REAL    NOT NULL DEFAULT 0,    -- 進貨量
+    closing_qty  REAL    NOT NULL DEFAULT 0,    -- 庫存量 (結存)
+    unit_price   TEXT,                          -- 進價 (如 @300/件)
+    loss_qty     REAL    NOT NULL DEFAULT 0,    -- 損耗量
 
     -- 圖片
     source_image_path TEXT NOT NULL,
