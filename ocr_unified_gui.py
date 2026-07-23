@@ -1808,6 +1808,7 @@ class UnifiedOCRApp:
 
 def main():
     root = tk.Tk()
+    root.geometry("+0+0")  # 強制定位主螢幕左上角，避免 WSLg 將視窗丟到副屏看不見
     app = UnifiedOCRApp(root)
     root.mainloop()
 
