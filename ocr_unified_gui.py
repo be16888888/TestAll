@@ -57,6 +57,38 @@ def time_str() -> str:
     return time.strftime("%H:%M:%S")
 
 
+def _merge_header_lines(lines: list[str]) -> list[str]:
+    """將表格前標頭資訊合併為單行 (用戶規則：同一行)。
+    觸發：含「進、銷貨庫存表」或「(X庫)」的標頭行，向後吸收緊接的續行
+    (含 年/月/日/填單者/單位/KG 的行)，合併為同一行 (以空白連接)。
+    不含上述關鍵字的雜訊行 (如 '+-' / 'A') 不參與合併，原樣保留。
+    """
+    if not lines:
+        return lines
+    HEADER_KEYS = ('年', '月', '日', '填單者', '單位', 'KG', '庫)')
+    merged: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        # 觸發條件：含「進、銷貨庫存表」或含「(X庫)」
+        if ('進、銷貨庫存表' in line) or ('庫)' in line and '(' in line):
+            combined = [line]
+            j = i + 1
+            while j < len(lines):
+                nxt = lines[j].strip()
+                if nxt and any(k in nxt for k in HEADER_KEYS) and '品項' not in nxt:
+                    combined.append(nxt)
+                    j += 1
+                else:
+                    break
+            merged.append(' '.join(combined))
+            i = j
+        else:
+            merged.append(line)
+            i += 1
+    return merged
+
+
 # ---------------------------
 # Main App
 # ---------------------------
