@@ -993,6 +993,11 @@ class UnifiedOCRApp:
 
     def _update_item_attr_display(self, item_name: str):
         """更新右側品項屬性顯示區：分類/保存天數/損耗率 + 該品項近日進貨。"""
+        # 確保 DB/service 已初始化 (否則單擊時 _ocr_service 不存在)
+        if not getattr(self, '_ocr_service', None):
+            self._ensure_db()
+        if not getattr(self, '_ocr_service', None):
+            return
         # 基礎預設
         self.attr_name_lbl.config(text=f"品項：{item_name}")
         cat = ""
