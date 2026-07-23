@@ -597,8 +597,9 @@ class SQLiteReviewRepository:
                 INSERT INTO ocr_reviewed_items (
                     review_date, library, item_name, ocr_raw_name, ocr_text,
                     word_path, quantity, unit, source_image_path, source_image_hash,
-                    confidence, page_count, reviewer, reviewed_at, is_verified, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    confidence, page_count, reviewer, reviewed_at, is_verified, notes,
+                    prev_stock, outbound_qty, inbound_qty, closing_qty, unit_price, loss_qty
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(review_date, library, item_name) DO UPDATE SET
                     ocr_raw_name = excluded.ocr_raw_name,
                     ocr_text = excluded.ocr_text,
@@ -613,13 +614,21 @@ class SQLiteReviewRepository:
                     reviewed_at = excluded.reviewed_at,
                     is_verified = excluded.is_verified,
                     notes = excluded.notes,
+                    prev_stock = excluded.prev_stock,
+                    outbound_qty = excluded.outbound_qty,
+                    inbound_qty = excluded.inbound_qty,
+                    closing_qty = excluded.closing_qty,
+                    unit_price = excluded.unit_price,
+                    loss_qty = excluded.loss_qty,
                     updated_at = datetime('now')
             """, (
                 item.review_date, item.library, item.item_name, item.ocr_raw_name,
                 item.ocr_text, item.word_path, item.quantity, item.unit,
                 item.source_image_path, item.source_image_hash,
                 item.confidence, item.page_count, item.reviewer,
-                item.reviewed_at, item.is_verified, item.notes
+                item.reviewed_at, item.is_verified, item.notes,
+                item.prev_stock, item.outbound_qty, item.inbound_qty,
+                item.closing_qty, item.unit_price, item.loss_qty
             ))
             return cur.lastrowid
     
